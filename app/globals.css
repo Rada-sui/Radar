@@ -1,26 +1,120 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-display: "Unbounded Variable", system-ui, sans-serif;
+  --font-sans: "Hanken Grotesk Variable", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* Monochrome base. Green and red are reserved for profit and loss only. */
+  --color-ink: #000000;
+  --color-panel: #0b0b0b;
+  --color-raise: #141414;
+  --color-line: rgb(255 255 255 / 0.1);
+  --color-line-strong: rgb(255 255 255 / 0.22);
+  --color-fg: #f5f5f5;
+  --color-dim: #9a9a9a;
+  --color-faint: #7a7a7a;
+  --color-gain: #3ddc97;
+  --color-loss: #ff5c5c;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  color-scheme: dark;
+}
+
+html {
+  background: #000;
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #fff;
+  color: #000;
+}
+
+:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Scroll reveal: a scan line draws each module in ---------- */
+html.js [data-reveal] {
+  position: relative;
+  clip-path: inset(-24px -24px 100% -24px);
+  opacity: 0;
+  transition:
+    clip-path 0.95s cubic-bezier(0.2, 0.7, 0.1, 1) var(--d, 0s),
+    opacity 0.5s ease var(--d, 0s);
+}
+
+html.js [data-reveal][data-in] {
+  clip-path: inset(-24px -24px -24px -24px);
+  opacity: 1;
+}
+
+html.js [data-reveal]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, #fff 50%, transparent);
+  box-shadow: 0 0 14px 1px rgb(255 255 255 / 0.55);
+  opacity: 0;
+  pointer-events: none;
+}
+
+html.js [data-reveal][data-in]::after {
+  animation: scan 0.95s cubic-bezier(0.2, 0.7, 0.1, 1) var(--d, 0s) both;
+}
+
+@keyframes scan {
+  0% {
+    top: 0;
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    top: 100%;
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  html.js [data-reveal] {
+    clip-path: none;
+    opacity: 1;
+    transition: none;
+  }
+  html.js [data-reveal]::after {
+    display: none;
+  }
+}
+
+/* Clickable things show the pointer (Tailwind v4 leaves buttons on the default arrow). */
+button:not(:disabled),
+[role="button"],
+summary,
+select {
+  cursor: pointer;
 }
