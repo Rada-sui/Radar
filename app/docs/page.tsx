@@ -31,6 +31,10 @@ export default function DocsPage() {
           the sale proceeds minus the average cost of those tokens.
         </p>
         <p>
+          X-Ray ranks profitable wallets for the pasted token from the visible last-24-hour trades. ROI is the
+          matched sale proceeds divided by the average-cost basis of those sold tokens, shown as an x multiple.
+        </p>
+        <p>
           A later buy never changes profit that was already taken. A sell with no earlier buy in the data
           window books nothing, and the wallet is marked with a dagger so you can see part of its history is
           missing.

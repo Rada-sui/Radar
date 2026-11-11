@@ -108,6 +108,7 @@ describe("aggregateWallets", () => {
     assert.equal(w.heldShare, 0.5);
     assert.equal(w.status, "sold some");
     assert.equal(w.unrealisedUsd, 5); // 50 * 0.2 - 50 * 0.1
+    assert.equal(w.returnMultiple, 3); // $15 proceeds / $5 matched cost
     assert.equal(w.soldBeforeWindow, false);
   });
 

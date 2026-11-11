@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { fmtAge, fmtPct, fmtUsd, toneClass } from "@/lib/format";
 import { useFeed } from "@/lib/useFeed";
+import { useState } from "react";
 import type { RadarFeed, RadarToken } from "@/lib/types";
-import { Notice, TableWrap } from "./ui";
+import { Notice, ShowCount, TableWrap } from "./ui";
 
 /** Quick flags from list data alone. The full trap check lives on X-Ray. */
 export function quickFlags(t: RadarToken): string[] {
@@ -21,6 +22,7 @@ export function quickFlags(t: RadarToken): string[] {
 
 export default function LaunchesView() {
   const { data, error, loading, reload } = useFeed<RadarFeed>("/api/radar?view=new", 45_000);
+  const [show, setShow] = useState(10);
 
   if (loading) return <p className="text-dim">Loading new pools.</p>;
   if (!data || !data.ok) {
@@ -36,6 +38,7 @@ export default function LaunchesView() {
 
   return (
     <div>
+      <div className="mb-4"><ShowCount count={data.tokens.length} value={show} onChange={setShow} /></div>
       <TableWrap min={820}>
         <caption className="sr-only">Newly created Sui pools with quick checks</caption>
         <thead>
@@ -50,7 +53,7 @@ export default function LaunchesView() {
           </tr>
         </thead>
         <tbody>
-          {data.tokens.map((t) => {
+          {data.tokens.slice(0, show).map((t) => {
             const flags = quickFlags(t);
             return (
               <tr key={t.address} className="border-b border-line transition-colors hover:bg-white/[0.03]">

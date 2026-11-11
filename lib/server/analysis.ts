@@ -5,7 +5,7 @@ import type {
   XRayCheck,
   XRayCoverage,
   XRaySummary,
-  XRayWallet,
+  XRayActivityWallet,
 } from "@/lib/types";
 import { num } from "./parse";
 
@@ -73,7 +73,7 @@ type Acc = {
  * buy price. Open positions never add to it. Realised profit can never exceed
  * what the wallet actually sold.
  */
-export function aggregateWallets(trades: Trade[], priceUsd: number | null): XRayWallet[] {
+export function aggregateWallets(trades: Trade[], priceUsd: number | null): XRayActivityWallet[] {
   const by = new Map<string, Acc>();
   const sellOnly = new Map<string, Acc>();
 
@@ -114,13 +114,14 @@ export function aggregateWallets(trades: Trade[], priceUsd: number | null): XRay
     }
   }
 
-  const rows: XRayWallet[] = [];
+  const rows: XRayActivityWallet[] = [];
   for (const [address, a] of by) {
     const matched = Math.min(a.soldTok, a.boughtTok);
     const soldBeforeWindow = a.soldTok > a.boughtTok * 1.001;
     const avgBuy = a.boughtTok > 0 ? a.boughtUsd / a.boughtTok : 0;
     const soldUsdMatched = a.soldTok > 0 ? a.soldUsd * (matched / a.soldTok) : 0;
     const realised = soldUsdMatched - matched * avgBuy;
+    const matchedCost = matched * avgBuy;
     const held = Math.max(a.boughtTok - a.soldTok, 0);
     const heldShare = a.boughtTok > 0 ? held / a.boughtTok : 0;
     const unrealised = priceUsd !== null ? held * priceUsd - held * avgBuy : null;
@@ -132,6 +133,7 @@ export function aggregateWallets(trades: Trade[], priceUsd: number | null): XRay
       sells: a.sells,
       boughtUsd: a.boughtUsd,
       soldUsd: a.soldUsd,
+      returnMultiple: matchedCost > 0 ? soldUsdMatched / matchedCost : null,
       realisedUsd: realised,
       unrealisedUsd: unrealised,
       heldShare,
@@ -142,7 +144,7 @@ export function aggregateWallets(trades: Trade[], priceUsd: number | null): XRay
   return rows.sort((x, y) => x.firstBuyAt - y.firstBuyAt);
 }
 
-export function summarise(trades: Trade[], wallets: XRayWallet[], earlyN = 20): XRaySummary {
+export function summarise(trades: Trade[], wallets: XRayActivityWallet[], earlyN = 20): XRaySummary {
   let buyUsd = 0;
   let sellUsd = 0;
   const buyers = new Set<string>();

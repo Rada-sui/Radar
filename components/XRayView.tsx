@@ -5,6 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { fmtAge, fmtAgo, fmtPct, fmtUsd, shortAddr, toneClass } from "@/lib/format";
 import { explorerAccount, explorerCoin } from "@/lib/sui";
 import type { CheckLevel, XRayCheck, XRayResponse, XRayResult, XRayWallet } from "@/lib/types";
+import { ShowCount } from "./ui";
 
 type Loaded = { key: string; res: XRayResponse };
 
@@ -23,10 +24,7 @@ export default function XRayView() {
       .then((res) => setLoaded({ key: ca, res }))
       .catch((e) => {
         if (ctrl.signal.aborted || (e as Error).name === "AbortError") return;
-        setLoaded({
-          key: ca,
-          res: { ok: false, code: "upstream", error: "Could not reach Radar. Check your connection and try again." },
-        });
+        setLoaded({ key: ca, res: { ok: false, code: "upstream", error: "The market data provider is temporarily unavailable. Try again shortly." } });
       });
     return () => ctrl.abort();
   }, [ca]);
@@ -102,18 +100,24 @@ function Scanning() {
 }
 
 function Failure({ res }: { res: Extract<XRayResponse, { ok: false }> }) {
+  const [seconds, setSeconds] = useState(res.retryAfterSeconds ?? 0);
+  useEffect(() => {
+    if (seconds <= 0) return;
+    const id = window.setInterval(() => setSeconds((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(id);
+  }, [seconds]);
   const title =
     res.code === "bad_input"
       ? "That is not a coin type."
       : res.code === "not_found"
         ? "No pools found for that token."
         : res.code === "rate_limited"
-          ? "The data sources are busy."
-          : "The data sources did not respond.";
+        ? "The data sources are busy."
+        : "The market data provider is temporarily unavailable.";
   return (
     <div className="max-w-2xl border border-line-strong p-6">
       <p className="font-medium">{title}</p>
-      <p className="mt-2 text-sm leading-relaxed text-dim">{res.error}</p>
+      <p className="mt-2 text-sm leading-relaxed text-dim">{res.error}{res.code === "rate_limited" && seconds > 0 ? ` Retry in ${seconds}s.` : ""}</p>
     </div>
   );
 }
@@ -125,8 +129,9 @@ const LEVEL: Record<CheckLevel, { label: string; cls: string }> = {
 };
 
 function Report({ r }: { r: XRayResult }) {
+  const [show, setShow] = useState(10);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const t = r.token;
-  const s = r.summary;
   return (
     <div className="space-y-14">
       {/* Token header */}
@@ -167,70 +172,75 @@ function Report({ r }: { r: XRayResult }) {
         </p>
       </div>
 
-      {/* Coverage */}
-      <div className="border border-line-strong p-5">
-        <p className="font-medium">
-          {r.coverage.kind === "complete"
-            ? "Full buyer history"
-            : r.coverage.kind === "partial"
-              ? "Partial buyer history"
-              : "No buyer history"}
-        </p>
-        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-dim">{r.coverage.note}</p>
-      </div>
+      <section>
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h3 className="font-display text-xl font-medium tracking-tight">Profitable wallets</h3>
+            <p className="mt-2 text-sm text-dim">{r.scan.trades} trades read across {r.scan.walletsRead} wallets.</p>
+          </div>
+          <ShowCount count={r.wallets.length} value={show} onChange={setShow} />
+        </div>
+        {r.wallets.length === 0 ? (
+          <p className="mt-6 border-t border-line pt-5 text-dim">No profitable wallets in the trades we can see.</p>
+        ) : (
+          <div className="mt-5 space-y-2">
+            {r.wallets.slice(0, show).map((wallet) => (
+              <WalletRow key={wallet.address} wallet={wallet} open={expanded === wallet.address} onToggle={() => setExpanded(expanded === wallet.address ? null : wallet.address)} />
+            ))}
+          </div>
+        )}
+      </section>
 
       {/* Checks */}
       {r.checks.length > 0 && (
         <section>
-          <h3 className="font-display text-xl font-medium tracking-tight">Trap check</h3>
+          <details className="border-t border-line pt-5">
+            <summary className="cursor-pointer font-display text-xl font-medium tracking-tight">Trap check</summary>
           <ul className="mt-5 border-b border-line">
             {r.checks.map((c) => (
               <CheckRow key={c.id} c={c} />
             ))}
           </ul>
-        </section>
-      )}
-
-      {/* Summary */}
-      {s && (
-        <section>
-          <h3 className="font-display text-xl font-medium tracking-tight">What the trades show</h3>
-          <dl className="mt-5 grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-4">
-            <Stat label="Trades read" value={String(s.trades)} />
-            <Stat label="Buyers" value={String(s.uniqueBuyers)} />
-            <Stat label="Sellers" value={String(s.uniqueSellers)} />
-            <Stat label="Buy volume" value={fmtUsd(s.buyUsd)} />
-            <Stat label="Sell volume" value={fmtUsd(s.sellUsd)} />
-            <Stat
-              label="Top-ten buyer share"
-              value={s.topTenBuyShare === null ? "n/a" : `${Math.round(s.topTenBuyShare * 100)}%`}
-            />
-            <Stat
-              label="First buyers still holding"
-              value={s.earlyCount ? `${s.earlyHolding} of ${s.earlyCount}` : "n/a"}
-            />
-          </dl>
-        </section>
-      )}
-
-      {/* Early buyers */}
-      {r.earlyBuyers.length > 0 && (
-        <section>
-          <h3 className="font-display text-xl font-medium tracking-tight">
-            {r.coverage.kind === "complete" ? "First 20 buyers" : "Earliest buyers in this window"}
-          </h3>
-          <Wallets rows={r.earlyBuyers} />
-          <p className="mt-4 max-w-3xl text-sm leading-relaxed text-faint">
-            Realised profit counts only what a wallet has sold, at its average buy price. Open positions are
-            not counted. A dagger marks a wallet that sold more than it bought in this window, so part of its
-            position is older than the data.
-          </p>
+          </details>
         </section>
       )}
 
       <p className="num text-xs text-faint">
         Updated {new Date(r.updatedAt).toLocaleTimeString()}. Sources: GeckoTerminal, DexScreener.
       </p>
+    </div>
+  );
+}
+
+function WalletRow({ wallet: w, open, onToggle }: { wallet: XRayWallet; open: boolean; onToggle: () => void }) {
+  const hold = w.holdTimeMs === null ? "n/a" : fmtAge(w.holdTimeMs / 60_000);
+  return (
+    <div className="border border-line">
+      <button type="button" aria-expanded={open} onClick={onToggle} className="flex w-full cursor-pointer items-center gap-3 px-4 py-4 text-left">
+        <span className="num min-w-0 flex-1 text-sm">{shortAddr(w.address, 4, 4)}</span>
+        <span className="rounded-full border border-white/50 px-2 py-0.5 text-xs">{w.tier}</span>
+        <span className="num text-sm text-gain">{w.roiMultiple === null ? "n/a" : `${w.roiMultiple.toFixed(1)}x`}</span>
+        <span aria-hidden="true" className="text-dim">{open ? "⌃" : "⌄"}</span>
+      </button>
+      {open && (
+        <div className="border-t border-line px-4 py-4 text-sm">
+          <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <Stat label="Realised profit" value={fmtUsd(w.realisedUsd)} tone="text-gain" />
+            <Stat label="Bought" value={`${fmtUsd(w.boughtUsd)} / ${w.boughtTokens.toLocaleString()} tokens`} />
+            <Stat label="Sold" value={`${fmtUsd(w.soldUsd)} / ${w.soldTokens.toLocaleString()} tokens`} />
+            <Stat label="Entry / exit" value={`${fmtUsd(w.averageEntryUsd)} / ${fmtUsd(w.averageExitUsd)}`} />
+            <Stat label="Buys / sells" value={`${w.buys} / ${w.sells}`} />
+            <Stat label="First buy" value={fmtAgo(w.firstBuyAt)} />
+            <Stat label="Last sell" value={fmtAgo(w.lastSellAt)} />
+            <Stat label="Hold time" value={hold} />
+          </dl>
+          <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-dim">
+            <span className="num break-all">{w.address}</span>
+            <button type="button" className="cursor-pointer underline underline-offset-4" onClick={() => void navigator.clipboard?.writeText(w.address)}>Copy</button>
+            <a href={explorerAccount(w.address)} target="_blank" rel="noreferrer" className="underline underline-offset-4">View on Suiscan</a>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -255,47 +265,3 @@ function CheckRow({ c }: { c: XRayCheck }) {
   );
 }
 
-function Wallets({ rows }: { rows: XRayWallet[] }) {
-  return (
-    <div className="-mx-5 mt-5 overflow-x-auto px-5 sm:mx-0 sm:px-0">
-      <table className="w-full min-w-[720px] border-collapse text-left">
-        <caption className="sr-only">Earliest buyers and what they did next</caption>
-        <thead>
-          <tr className="border-b border-line-strong text-sm text-faint">
-            <th scope="col" className="py-3 pr-4 font-normal">Wallet</th>
-            <th scope="col" className="px-4 py-3 font-normal">First bought</th>
-            <th scope="col" className="px-4 py-3 text-right font-normal">Bought</th>
-            <th scope="col" className="px-4 py-3 text-right font-normal">Sold</th>
-            <th scope="col" className="px-4 py-3 text-right font-normal">Realised</th>
-            <th scope="col" className="py-3 pl-4 font-normal">Position</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((w) => (
-            <tr key={w.address} className="border-b border-line">
-              <td className="num py-3.5 pr-4 text-sm">
-                <a
-                  href={explorerAccount(w.address)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="underline decoration-white/30 underline-offset-4 hover:decoration-white"
-                >
-                  {shortAddr(w.address, 6, 4)}
-                </a>
-              </td>
-              <td className="px-4 py-3.5 text-sm text-dim">{fmtAgo(w.firstBuyAt)}</td>
-              <td className="num px-4 py-3.5 text-right text-sm">{fmtUsd(w.boughtUsd)}</td>
-              <td className="num px-4 py-3.5 text-right text-sm text-dim">{fmtUsd(w.soldUsd)}</td>
-              <td className={`num px-4 py-3.5 text-right text-sm ${toneClass(w.realisedUsd)}`}>
-                {w.realisedUsd > 0 ? "+" : w.realisedUsd < 0 ? "-" : ""}
-                {fmtUsd(Math.abs(w.realisedUsd))}
-                {w.soldBeforeWindow && <span title="Sold more than it bought in this window"> †</span>}
-              </td>
-              <td className="py-3.5 pl-4 text-sm text-dim">{w.status}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}

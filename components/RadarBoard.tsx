@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { fmtAge, fmtPct, fmtUsd, toneClass } from "@/lib/format";
 import type { Momentum, RadarFeed, RadarToken, RadarView } from "@/lib/types";
+import { ShowCount } from "./ui";
 
 const VIEWS: { id: RadarView; label: string; hint: string }[] = [
   { id: "trending", label: "Trending", hint: "Pools drawing the most attention in the last hour" },
@@ -18,6 +19,7 @@ export default function RadarBoard() {
   const [view, setView] = useState<RadarView>("trending");
   const [feed, setFeed] = useState<RadarFeed | null>(null);
   const [loading, setLoading] = useState(true);
+  const [show, setShow] = useState(10);
   const seq = useRef(0);
 
   const load = useCallback(async (v: RadarView) => {
@@ -92,7 +94,12 @@ export default function RadarBoard() {
           {feed && feed.ok && tokens.length === 0 && (
             <p className="py-10 text-dim">No tokens to show for this list right now.</p>
           )}
-          {tokens.length > 0 && <TokenTable tokens={tokens} />}
+          {tokens.length > 0 && (
+            <>
+              <div className="mb-4"><ShowCount count={tokens.length} value={show} onChange={setShow} /></div>
+              <TokenTable tokens={tokens.slice(0, show)} />
+            </>
+          )}
         </div>
 
         {feed && feed.ok && (

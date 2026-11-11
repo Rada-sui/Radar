@@ -72,7 +72,12 @@ export type LeaderRow = {
 export type LeaderBoard = {
   rows: LeaderRow[];
   scan: {
+    /** Pools whose trades were successfully read. */
     pools: number;
+    /** Unique candidate pools returned by the three source lists. */
+    poolsTotal: number;
+    /** Candidate pools not selected for scanning, usually because of low volume or the scan cap. */
+    poolsSkipped: number;
     poolsFailed: number;
     trades: number;
     wallets: number;
@@ -113,18 +118,37 @@ export type XRayCheck = {
 
 export type XRayWallet = {
   address: string;
+  tier: Tier;
+  roiMultiple: number | null;
+  firstBuyAt: number | null;
+  lastSellAt: number | null;
+  buys: number;
+  sells: number;
+  boughtUsd: number;
+  soldUsd: number;
+  boughtTokens: number;
+  soldTokens: number;
+  /** Profit on the part that was sold. Open positions are not counted. */
+  realisedUsd: number;
+  averageEntryUsd: number | null;
+  averageExitUsd: number | null;
+  holdTimeMs: number | null;
+  partial: boolean;
+};
+
+/** Internal activity summary used by the trap-check calculations. */
+export type XRayActivityWallet = {
+  address: string;
   firstBuyAt: number;
   buys: number;
   sells: number;
   boughtUsd: number;
   soldUsd: number;
-  /** Profit on the part that was sold. Open positions are not counted. */
   realisedUsd: number;
-  /** Value of what is still held, minus its cost. Null when no price is known. */
+  returnMultiple: number | null;
   unrealisedUsd: number | null;
   heldShare: number;
   status: "holding" | "sold some" | "sold all";
-  /** True when the wallet sold more than it bought inside the window. */
   soldBeforeWindow: boolean;
 };
 
@@ -169,10 +193,16 @@ export type XRayResult = {
   coverage: XRayCoverage;
   summary: XRaySummary | null;
   checks: XRayCheck[];
-  earlyBuyers: XRayWallet[];
+  wallets: XRayWallet[];
+  scan: { trades: number; walletsRead: number };
   updatedAt: number;
 };
 
 export type XRayResponse =
   | { ok: true; result: XRayResult }
-  | { ok: false; error: string; code: "bad_input" | "not_found" | "rate_limited" | "upstream" };
+  | {
+      ok: false;
+      error: string;
+      code: "bad_input" | "not_found" | "rate_limited" | "upstream";
+      retryAfterSeconds?: number;
+    };

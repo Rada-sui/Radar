@@ -24,7 +24,7 @@ export default function ReportView() {
   return (
     <div className="space-y-14">
       <dl className="grid grid-cols-2 gap-6 sm:grid-cols-3">
-        <Stat label="Pools covered" value={String(r.totals.pools)} />
+        <Stat label="Pools read" value={String(r.totals.pools)} />
         <Stat label="Volume, 24 hours" value={fmtUsd(r.totals.volumeH24)} />
         <Stat label="Liquidity" value={fmtUsd(r.totals.liquidity)} />
       </dl>

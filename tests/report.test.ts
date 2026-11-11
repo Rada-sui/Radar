@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { buildReport } from "@/lib/server/report";
+import { scanCounts } from "@/lib/server/leaderboard";
 import type { RadarToken } from "@/lib/types";
 
 const tok = (o: Partial<RadarToken>): RadarToken => ({
@@ -66,5 +67,16 @@ describe("buildReport", () => {
     const r = buildReport([[]]);
     assert.equal(r.totals.pools, 0);
     assert.deepEqual(r.runners, []);
+  });
+});
+
+describe("leaderboard pool counts", () => {
+  it("accounts for read, skipped, and failed pools without inflating the scan", () => {
+    assert.deepEqual(scanCounts(21, 12, 2), {
+      pools: 10,
+      poolsTotal: 21,
+      poolsSkipped: 9,
+      poolsFailed: 2,
+    });
   });
 });

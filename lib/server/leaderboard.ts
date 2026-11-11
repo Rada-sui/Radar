@@ -17,33 +17,44 @@ const RECENT_HOURS = 6;
 const BOARD_TTL_MS = 10 * 60_000;
 const BOARD_SIZE = 50;
 
+export function scanCounts(total: number, selected: number, failed: number) {
+  const safeTotal = Math.max(0, total);
+  const safeSelected = Math.min(safeTotal, Math.max(0, selected));
+  const safeFailed = Math.min(safeSelected, Math.max(0, failed));
+  return {
+    pools: safeSelected - safeFailed,
+    poolsTotal: safeTotal,
+    poolsSkipped: safeTotal - safeSelected,
+    poolsFailed: safeFailed,
+  };
+}
+
 type Memo = { at: number; value: LeaderBoard | null; building: Promise<LeaderBoard> | null };
 const g = globalThis as unknown as { __radarBoard?: Memo };
 const memo: Memo = (g.__radarBoard ??= { at: 0, value: null, building: null });
 
-async function pickPools(): Promise<RadarToken[]> {
+async function pickPools(): Promise<{ pools: RadarToken[]; total: number; skipped: number }> {
   const lists = await Promise.allSettled([topTokens(), trendingTokens("1h"), newTokens()]);
   const seen = new Set<string>();
-  const picked: RadarToken[] = [];
+  const candidates: RadarToken[] = [];
   // Interleave the lists so one of them cannot crowd out the others.
   const ok = lists.flatMap((l) => (l.status === "fulfilled" ? [l.value] : []));
   const longest = Math.max(0, ...ok.map((l) => l.length));
-  for (let i = 0; i < longest && picked.length < MAX_POOLS; i++) {
+  for (let i = 0; i < longest; i++) {
     for (const list of ok) {
       const tok = list[i];
       if (!tok || seen.has(tok.address)) continue;
-      // Pools with almost no trading add cost and no signal.
-      if ((tok.volumeH24 ?? 0) < 1_000) continue;
       seen.add(tok.address);
-      picked.push(tok);
-      if (picked.length >= MAX_POOLS) break;
+      candidates.push(tok);
     }
   }
-  return picked;
+  const eligible = candidates.filter((tok) => (tok.volumeH24 ?? 0) >= 1_000);
+  return { pools: eligible.slice(0, MAX_POOLS), total: candidates.length, skipped: candidates.length - Math.min(eligible.length, MAX_POOLS) };
 }
 
 async function build(): Promise<LeaderBoard> {
-  const pools = await pickPools();
+  const selection = await pickPools();
+  const pools = selection.pools;
   if (pools.length === 0) throw new Error("no pools");
 
   const results = await Promise.allSettled(
@@ -73,8 +84,7 @@ async function build(): Promise<LeaderBoard> {
   return {
     rows: graded.ranked.slice(0, BOARD_SIZE),
     scan: {
-      pools: scanned,
-      poolsFailed: failed,
+      ...scanCounts(selection.total, pools.length, failed),
       trades: all.length,
       wallets: pnls.length,
       windowHours: WINDOW_HOURS,

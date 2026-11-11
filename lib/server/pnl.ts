@@ -13,14 +13,20 @@ export type WalletPnl = {
   recentRealised: number;
   boughtUsd: number;
   soldUsd: number;
+  boughtTokens: number;
+  soldTokens: number;
   /** Sold proceeds that were matched against a known buy. */
   soldMatchedUsd: number;
+  /** Matched sale proceeds divided by the matched average-cost basis. */
+  roiMultiple: number | null;
   buys: number;
   sells: number;
   tokensTraded: number;
   tokensClosed: number;
   wins: number;
   lastTs: number;
+  firstBuyAt: number | null;
+  lastSellAt: number | null;
   /** Token units sold that had no matching buy in the data window. */
   unmatchedTokens: number;
 };
@@ -42,13 +48,18 @@ export function computePnl(trades: PnlTrade[], recentSince: number): WalletPnl[]
         recentRealised: 0,
         boughtUsd: 0,
         soldUsd: 0,
+      boughtTokens: 0,
+      soldTokens: 0,
         soldMatchedUsd: 0,
+      roiMultiple: null,
         buys: 0,
         sells: 0,
         tokensTraded: 0,
         tokensClosed: 0,
         wins: 0,
         lastTs: 0,
+      firstBuyAt: null,
+      lastSellAt: null,
         unmatchedTokens: 0,
         pos: new Map(),
         tokenPnl: new Map(),
@@ -64,10 +75,14 @@ export function computePnl(trades: PnlTrade[], recentSince: number): WalletPnl[]
       pos.held += t.tokens;
       pos.cost += t.usd;
       w.boughtUsd += t.usd;
+      w.boughtTokens += t.tokens;
+      w.firstBuyAt ??= t.ts;
       w.buys += 1;
     } else {
       w.sells += 1;
       w.soldUsd += t.usd;
+      w.soldTokens += t.tokens;
+      w.lastSellAt = t.ts;
       const matched = Math.min(t.tokens, pos.held);
       if (matched > 0) {
         const avg = pos.cost / pos.held;
@@ -89,19 +104,25 @@ export function computePnl(trades: PnlTrade[], recentSince: number): WalletPnl[]
   return [...wallets.values()].map((w) => {
     let wins = 0;
     for (const v of w.tokenPnl.values()) if (v > 0) wins += 1;
+    const matchedCost = w.soldMatchedUsd - w.realised;
     return {
       address: w.address,
       realised: w.realised,
       recentRealised: w.recentRealised,
       boughtUsd: w.boughtUsd,
       soldUsd: w.soldUsd,
+      boughtTokens: w.boughtTokens,
+      soldTokens: w.soldTokens,
       soldMatchedUsd: w.soldMatchedUsd,
+      roiMultiple: matchedCost > 0 ? w.soldMatchedUsd / matchedCost : null,
       buys: w.buys,
       sells: w.sells,
       tokensTraded: w.traded.size,
       tokensClosed: w.tokenPnl.size,
       wins,
       lastTs: w.lastTs,
+      firstBuyAt: w.firstBuyAt,
+      lastSellAt: w.lastSellAt,
       unmatchedTokens: w.unmatchedTokens,
     };
   });
@@ -116,6 +137,8 @@ export type Graded = {
   droppedInconsistent: number;
   droppedUnprofitable: number;
 };
+
+export type RankedWalletPnl = WalletPnl & Pick<LeaderRow, "tier" | "score" | "partial">;
 
 function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
@@ -187,4 +210,15 @@ export function gradeWallets(pnls: WalletPnl[]): Graded {
 
   ranked.sort((a, b) => b.score - a.score || b.realisedUsd - a.realisedUsd);
   return { ranked, droppedBots, droppedInconsistent, droppedUnprofitable };
+}
+
+/** Applies the shared leaderboard safeguards, then ranks the accepted wallets by profit on one token. */
+export function rankTokenWallets(pnls: WalletPnl[]): RankedWalletPnl[] {
+  const byAddress = new Map(pnls.map((p) => [p.address, p]));
+  return gradeWallets(pnls).ranked
+    .map((row) => {
+      const pnl = byAddress.get(row.address)!;
+      return { ...pnl, tier: row.tier, score: row.score, partial: row.partial };
+    })
+    .sort((a, b) => b.realised - a.realised || (b.roiMultiple ?? 0) - (a.roiMultiple ?? 0));
 }

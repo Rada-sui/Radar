@@ -1,10 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { fmtAgo, fmtUsd, shortAddr, toneClass } from "@/lib/format";
 import { explorerAccount } from "@/lib/sui";
 import { useFeed } from "@/lib/useFeed";
 import type { LeaderResponse, LeaderRow, Tier } from "@/lib/types";
-import { Notice, TableWrap } from "./ui";
+import { Notice, ShowCount, TableWrap } from "./ui";
 
 const TIER_CLS: Record<Tier, string> = {
   Diamond: "border-white text-white",
@@ -14,6 +15,7 @@ const TIER_CLS: Record<Tier, string> = {
 
 export default function LeaderboardView() {
   const { data, error, loading, reload } = useFeed<LeaderResponse>("/api/leaderboard", 120_000);
+  const [show, setShow] = useState(10);
 
   if (loading) {
     return (
@@ -38,12 +40,13 @@ export default function LeaderboardView() {
     <div>
       <div className="border border-line p-5 text-sm leading-relaxed text-dim">
         <p>
-          Built from <span className="num text-white">{s.trades}</span> trades across{" "}
-          <span className="num text-white">{s.pools}</span> of the most active Sui pools over the last{" "}
+          Built from <span className="num text-white">{s.trades}</span> trades. Scanned{" "}
+          <span className="num text-white">{s.pools}</span> of <span className="num text-white">{s.poolsTotal}</span> candidate pools over the last{" "}
           {s.windowHours} hours, covering <span className="num text-white">{s.wallets}</span> wallets. The free
           trade feed shows each pool&apos;s latest 300 trades, so this is a snapshot of recent activity, not a
           wallet&apos;s lifetime record.
-          {s.poolsFailed > 0 && ` ${s.poolsFailed} pools could not be read this time.`}
+          {s.poolsSkipped > 0 && ` ${s.poolsSkipped} skipped (too little trading or scan limit).`}
+          {s.poolsFailed > 0 && ` ${s.poolsFailed} failed to load.`}
         </p>
         <p className="mt-2">
           Left out: {s.droppedBots} likely bots (over 150 trades in a day) and {s.droppedInconsistent} wallets
@@ -57,7 +60,8 @@ export default function LeaderboardView() {
         </p>
       ) : (
         <div className="mt-8">
-          <Table rows={board.rows} recentHours={s.recentHours} />
+          <div className="mb-4"><ShowCount count={board.rows.length} value={show} onChange={setShow} /></div>
+          <Table rows={board.rows.slice(0, show)} recentHours={s.recentHours} />
         </div>
       )}
 

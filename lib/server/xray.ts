@@ -5,6 +5,7 @@ import { aggregateWallets, computeChecks, coverageOf, parseTrades, summarise } f
 import { UpstreamError } from "./cache";
 import { tokenPairs } from "./dexscreener";
 import { poolTrades, tokenInfo } from "./gecko";
+import { computePnl, rankTokenWallets } from "./pnl";
 
 export async function analyseToken(rawInput: string): Promise<{ body: XRayResponse; status: number }> {
   const coinType = rawInput.trim();
@@ -27,13 +28,18 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
     const failed = infoR.status === "rejected" && pairsR.status === "rejected";
     if (limited) {
       return {
-        body: { ok: false, code: "rate_limited", error: "The free data sources are busy. Try again in a minute." },
+        body: {
+          ok: false,
+          code: "rate_limited",
+          error: "The data sources are busy.",
+          retryAfterSeconds: 60,
+        },
         status: 429,
       };
     }
     if (failed) {
       return {
-        body: { ok: false, code: "upstream", error: "The market data sources did not respond. Try again shortly." },
+        body: { ok: false, code: "upstream", error: "The market data provider is temporarily unavailable. Try again shortly." },
         status: 502,
       };
     }
@@ -49,6 +55,12 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
 
   const best = pairs[0] ?? null;
   const poolAddress = best?.pairAddress ?? info?.topPools[0] ?? null;
+  if (!poolAddress) {
+    return {
+      body: { ok: false, code: "not_found", error: "This token is known, but no active Sui pool was found for it." },
+      status: 404,
+    };
+  }
   const ageMinutes = best?.createdAt ? Math.max(0, (Date.now() - best.createdAt) / 60_000) : null;
   const priceUsd = info?.priceUsd ?? best?.priceUsd ?? null;
 
@@ -65,6 +77,25 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
   const trades = rawTrades ? parseTrades(rawTrades, coinType) : [];
   const wallets = aggregateWallets(trades, priceUsd);
   const summary = trades.length ? summarise(trades, wallets) : null;
+  const pnlRows = computePnl(trades.map((trade) => ({ ...trade, token: coinType })), Date.now() - 6 * 3_600_000);
+  const profitableWallets = rankTokenWallets(pnlRows).map((wallet) => ({
+    address: wallet.address,
+    tier: wallet.tier,
+    roiMultiple: wallet.roiMultiple,
+    firstBuyAt: wallet.firstBuyAt,
+    lastSellAt: wallet.lastSellAt,
+    buys: wallet.buys,
+    sells: wallet.sells,
+    boughtUsd: wallet.boughtUsd,
+    soldUsd: wallet.soldUsd,
+    boughtTokens: wallet.boughtTokens,
+    soldTokens: wallet.soldTokens,
+    realisedUsd: wallet.realised,
+    averageEntryUsd: wallet.boughtTokens > 0 ? wallet.boughtUsd / wallet.boughtTokens : null,
+    averageExitUsd: wallet.soldTokens > 0 ? wallet.soldUsd / wallet.soldTokens : null,
+    holdTimeMs: wallet.firstBuyAt !== null && wallet.lastSellAt !== null ? Math.max(0, wallet.lastSellAt - wallet.firstBuyAt) : null,
+    partial: wallet.partial,
+  }));
   const coverage = coverageOf(trades, ageMinutes);
   if (tradesFailed) {
     coverage.note = "Trade history could not be loaded right now, so buyer details are missing. Try again in a minute.";
@@ -98,7 +129,8 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
     coverage,
     summary,
     checks: computeChecks({ summary, coverage, liquidityUsd, marketCap, ageMinutes, hasProfile }),
-    earlyBuyers: wallets.slice(0, 20),
+    wallets: profitableWallets,
+    scan: { trades: trades.length, walletsRead: pnlRows.length },
     updatedAt: Date.now(),
   };
 

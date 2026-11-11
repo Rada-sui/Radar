@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { BOT_TRADE_LIMIT, computePnl, gradeWallets, tierOf, type PnlTrade, type WalletPnl } from "@/lib/server/pnl";
+import { BOT_TRADE_LIMIT, computePnl, gradeWallets, rankTokenWallets, tierOf, type PnlTrade, type WalletPnl } from "@/lib/server/pnl";
+import { showCountOptions } from "@/components/ui";
 
 const t = (o: Partial<PnlTrade>): PnlTrade => ({
   ts: 0,
@@ -103,13 +104,18 @@ const base = (o: Partial<WalletPnl>): WalletPnl => ({
   recentRealised: 0,
   boughtUsd: 10000,
   soldUsd: 15000,
+  boughtTokens: 100,
+  soldTokens: 100,
   soldMatchedUsd: 15000,
+  roiMultiple: 1.5,
   buys: 6,
   sells: 6,
   tokensTraded: 5,
   tokensClosed: 5,
   wins: 4,
   lastTs: 1,
+  firstBuyAt: 1,
+  lastSellAt: 2,
   unmatchedTokens: 0,
   ...o,
 });
@@ -189,5 +195,23 @@ describe("tierOf", () => {
     assert.equal(tierOf(90, 0.4, 5), "Silver");
     assert.equal(tierOf(60, 0.5, 2), "Gold");
     assert.equal(tierOf(40, 1, 10), "Silver");
+  });
+});
+
+describe("token wallet ranking and show counts", () => {
+  it("keeps only profitable wallets and orders by realised profit", () => {
+    const rows = rankTokenWallets([
+      { ...base({ address: "0xlow", realised: 2, soldMatchedUsd: 12 }), roiMultiple: 1.2 },
+      { ...base({ address: "0xhigh", realised: 50, soldMatchedUsd: 150 }), roiMultiple: 1.5 },
+      { ...base({ address: "0xloss", realised: -2 }), roiMultiple: 0.8 },
+      { ...base({ address: "0xbot", buys: BOT_TRADE_LIMIT, sells: 1 }), roiMultiple: 2 },
+    ]);
+    assert.deepEqual(rows.map((row) => row.address), ["0xhigh", "0xlow"]);
+  });
+
+  it("only offers show counts the loaded list can fill", () => {
+    assert.deepEqual(showCountOptions(4), []);
+    assert.deepEqual(showCountOptions(10), [5, 10]);
+    assert.deepEqual(showCountOptions(30), [5, 10, 20, 30]);
   });
 });

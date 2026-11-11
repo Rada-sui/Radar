@@ -66,3 +66,34 @@ export function TableWrap({ children, min = 680 }: { children: ReactNode; min?: 
 export function SectionTitle({ children }: { children: ReactNode }) {
   return <h2 className="font-display text-xl font-medium tracking-tight">{children}</h2>;
 }
+
+export function showCountOptions(count: number) {
+  return [5, 10, 20, 30].filter((option) => count >= option);
+}
+
+export function ShowCount({ count, value, onChange }: { count: number; value: number; onChange: (value: number) => void }) {
+  const options = showCountOptions(count);
+  if (options.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm" aria-label="Rows to show">
+      <span className="text-dim">Show</span>
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Number of rows">
+        {options.map((option) => (
+          <button
+            key={option}
+            type="button"
+            aria-pressed={value === option}
+            onClick={() => onChange(option)}
+            className={`cursor-pointer rounded-full border px-3 py-1 transition-colors ${
+              value === option
+                ? "border-white bg-white text-black"
+                : "border-line-strong text-dim hover:border-white hover:text-white"
+            }`}
+          >
+            {option}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
