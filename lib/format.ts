@@ -40,3 +40,10 @@ export function toneClass(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n) || n === 0) return "text-dim";
   return n > 0 ? "text-gain" : "text-loss";
 }
+
+/** Display ROI without rounding small profitable differences down to 1.0x. */
+export function fmtRoi(n: number | null | undefined): string {
+  if (n == null || !Number.isFinite(n)) return "n/a";
+  if (n >= 2) return `${n.toFixed(1)}x`;
+  return `${n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}x`;
+}

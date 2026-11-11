@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { BOT_TRADE_LIMIT, computePnl, gradeWallets, rankTokenWallets, tierOf, type PnlTrade, type WalletPnl } from "@/lib/server/pnl";
 import { showCountOptions } from "@/components/ui";
+import { fmtRoi } from "@/lib/format";
 
 const t = (o: Partial<PnlTrade>): PnlTrade => ({
   ts: 0,
@@ -199,6 +200,11 @@ describe("tierOf", () => {
 });
 
 describe("token wallet ranking and show counts", () => {
+  it("does not round small profitable ROIs down to 1.0x", () => {
+    assert.equal(fmtRoi(1.04), "1.04x");
+    assert.equal(fmtRoi(1.4), "1.4x");
+    assert.equal(fmtRoi(6), "6.0x");
+  });
   it("keeps only profitable wallets and orders by realised profit", () => {
     const rows = rankTokenWallets([
       { ...base({ address: "0xlow", realised: 2, soldMatchedUsd: 12 }), roiMultiple: 1.2 },

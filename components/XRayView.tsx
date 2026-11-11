@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
-import { fmtAge, fmtAgo, fmtPct, fmtUsd, shortAddr, toneClass } from "@/lib/format";
+import { fmtAge, fmtAgo, fmtPct, fmtRoi, fmtUsd, shortAddr, toneClass } from "@/lib/format";
 import { explorerAccount, explorerCoin } from "@/lib/sui";
 import type { CheckLevel, XRayCheck, XRayResponse, XRayResult, XRayWallet } from "@/lib/types";
 import { ShowCount } from "./ui";
@@ -219,7 +219,7 @@ function WalletRow({ wallet: w, open, onToggle }: { wallet: XRayWallet; open: bo
       <button type="button" aria-expanded={open} onClick={onToggle} className="flex w-full cursor-pointer items-center gap-3 px-4 py-4 text-left">
         <span className="num min-w-0 flex-1 text-sm">{shortAddr(w.address, 4, 4)}</span>
         <span className="rounded-full border border-white/50 px-2 py-0.5 text-xs">{w.tier}</span>
-        <span className="num text-sm text-gain">{w.roiMultiple === null ? "n/a" : `${w.roiMultiple.toFixed(1)}x`}</span>
+        <span className="num text-sm text-gain">{fmtRoi(w.roiMultiple)}</span>
         <span aria-hidden="true" className="text-dim">{open ? "⌃" : "⌄"}</span>
       </button>
       {open && (
