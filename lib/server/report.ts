@@ -8,7 +8,15 @@ import { newTokens, topTokens, trendingTokens } from "./gecko";
  */
 export function buildReport(lists: RadarToken[][], now = Date.now()) {
   const byToken = new Map<string, RadarToken>();
-  for (const list of lists) for (const t of list) if (!byToken.has(t.address)) byToken.set(t.address, t);
+  for (const list of lists) {
+    for (const t of list) {
+      const existing = byToken.get(t.address);
+      // The same token can appear in several pools. Prefer a real pool age
+      // over GeckoTerminal's unknown-timestamp sentinel, while preserving the
+      // first list's values for every other field.
+      if (!existing || (existing.ageMinutes === null && t.ageMinutes !== null)) byToken.set(t.address, t);
+    }
+  }
   const all = [...byToken.values()];
 
   // Ignore pools too thin to act on when naming the day's best runners.

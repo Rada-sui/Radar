@@ -24,6 +24,11 @@ const tok = (o: Partial<RadarToken>): RadarToken => ({
 });
 
 describe("buildReport", () => {
+  it("prefers a known pool age when duplicate token pools include an unknown age", () => {
+    const unknown = tok({ address: "same", ageMinutes: null });
+    const known = tok({ address: "same", ageMinutes: 42 });
+    assert.equal(buildReport([[unknown], [known]], 123).newest[0]?.ageMinutes, 42);
+  });
   it("de-duplicates tokens that appear in several lists", () => {
     const r = buildReport([[tok({ address: "x" })], [tok({ address: "x" }), tok({ address: "y" })]]);
     assert.equal(r.totals.pools, 2);
