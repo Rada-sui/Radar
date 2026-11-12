@@ -1,138 +1,35 @@
 "use client";
-
 import { useState } from "react";
-import { fmtAgo, fmtUsd, shortAddr, toneClass } from "@/lib/format";
+import { fmtAge, fmtPct, fmtUsd, shortAddr } from "@/lib/format";
 import { explorerAccount } from "@/lib/sui";
 import { useFeed } from "@/lib/useFeed";
 import type { LeaderResponse, LeaderRow, Tier } from "@/lib/types";
-import { Notice, ShowCount, TableWrap } from "./ui";
+import { Notice, ShowCount } from "./ui";
 
-const TIER_CLS: Record<Tier, string> = {
-  Diamond: "border-white text-white",
-  Gold: "border-white/60 text-white/90",
-  Silver: "border-white/25 text-dim",
-};
+const TIER_CLS: Record<Tier, string> = { Diamond: "border-white text-white", Gold: "border-white/60 text-white/90", Silver: "border-white/25 text-dim" };
 
 export default function LeaderboardView() {
   const { data, error, loading, reload } = useFeed<LeaderResponse>("/api/leaderboard", 120_000);
   const [show, setShow] = useState(10);
-
-  if (loading) {
-    return (
-      <p className="text-dim" aria-live="polite">
-        Reading trades from the most active pools. The first load can take several seconds.
-      </p>
-    );
-  }
-  if (!data || !data.ok) {
-    return (
-      <Notice
-        title="The board could not be built."
-        body={(data && !data.ok ? data.error : error) ?? "Try again in a minute."}
-        action={{ label: "Try again", onClick: reload }}
-      />
-    );
-  }
-
+  if (loading) return <p className="text-dim" aria-live="polite">Reading trades from the most active pools. The first load can take several seconds.</p>;
+  if (!data || !data.ok) return <Notice title="The board could not be built." body={(data && !data.ok ? data.error : error) ?? "Try again in a minute."} action={{ label: "Try again", onClick: reload }} />;
   const { board } = data;
-  const s = board.scan;
-  return (
-    <div>
-      <div className="border border-line p-5 text-sm leading-relaxed text-dim">
-        <p>
-          Built from <span className="num text-white">{s.trades}</span> trades. Scanned{" "}
-          <span className="num text-white">{s.pools}</span> of <span className="num text-white">{s.poolsTotal}</span> candidate pools over the last{" "}
-          {s.windowHours} hours, covering <span className="num text-white">{s.wallets}</span> wallets. The free
-          trade feed shows each pool&apos;s latest 300 trades, so this is a snapshot of recent activity, not a
-          wallet&apos;s lifetime record.
-          {s.poolsSkipped > 0 && ` ${s.poolsSkipped} skipped (too little trading or scan limit).`}
-          {s.poolsFailed > 0 && ` ${s.poolsFailed} failed to load.`}
-        </p>
-        <p className="mt-2">
-          Left out: {s.droppedBots} likely bots (over 150 trades in a day) and {s.droppedInconsistent} wallets
-          whose figures did not add up.
-        </p>
-      </div>
-
-      {board.rows.length === 0 ? (
-        <p className="mt-10 text-dim">
-          No wallet has realised a profit in this window yet. Check back as more trades come in.
-        </p>
-      ) : (
-        <div className="mt-8">
-          <div className="mb-4"><ShowCount count={board.rows.length} value={show} onChange={setShow} /></div>
-          <Table rows={board.rows.slice(0, show)} recentHours={s.recentHours} />
-        </div>
-      )}
-
-      <p className="num mt-4 text-xs text-faint">
-        Updated {new Date(board.updatedAt).toLocaleTimeString()}. Refreshes about every ten minutes.
-      </p>
+  return <div>
+    <div className="border border-line p-5 text-sm leading-relaxed text-dim">
+      <div className="mb-5 grid grid-cols-2 gap-4 border-b border-line pb-5"><div><div className="text-xs uppercase tracking-[0.16em] text-faint">Total tracked</div><div className="num mt-1 text-xl text-white">{board.scan.wallets}</div></div><div><div className="text-xs uppercase tracking-[0.16em] text-faint">Updated</div><div className="num mt-1 text-xl text-white">{new Date(board.updatedAt).toLocaleTimeString()}</div></div></div>
+      <p>Built from <span className="num text-white">{board.scan.trades}</span> trades. Scanned <span className="num text-white">{board.scan.pools}</span> of <span className="num text-white">{board.scan.poolsTotal}</span> candidate pools over the last {board.scan.windowHours} hours. {board.scan.poolsSkipped > 0 && `${board.scan.poolsSkipped} skipped.`} {board.scan.poolsFailed > 0 && `${board.scan.poolsFailed} failed to load.`}</p>
+      <p className="mt-2">Left out: {board.scan.droppedBots} likely bots and {board.scan.droppedInconsistent} wallets whose figures did not add up.</p>
     </div>
-  );
+    {board.rows.length === 0 ? <p className="mt-10 text-dim">No wallet has realised a profit in this window yet.</p> : <div className="mt-8"><div className="mb-4"><ShowCount count={board.rows.length} value={show} onChange={setShow} /></div><div className="space-y-2">{board.rows.slice(0, show).map((row, i) => <WalletRow key={row.address} row={row} rank={i + 1} />)}</div></div>}
+  </div>;
 }
 
-function Table({ rows, recentHours }: { rows: LeaderRow[]; recentHours: number }) {
-  return (
-    <TableWrap min={860}>
-      <caption className="sr-only">Wallets ranked by score</caption>
-      <thead>
-        <tr className="border-b border-line-strong text-sm text-faint">
-          <th scope="col" className="py-3 pr-3 font-normal">Rank</th>
-          <th scope="col" className="px-3 py-3 font-normal">Wallet</th>
-          <th scope="col" className="px-3 py-3 font-normal">Tier</th>
-          <th scope="col" className="px-3 py-3 text-right font-normal">Score</th>
-          <th scope="col" className="px-3 py-3 text-right font-normal">Realised profit</th>
-          <th scope="col" className="px-3 py-3 text-right font-normal">Last {recentHours}h</th>
-          <th scope="col" className="px-3 py-3 text-right font-normal">Win rate</th>
-          <th scope="col" className="px-3 py-3 text-right font-normal">Tokens sold</th>
-          <th scope="col" className="py-3 pl-3 text-right font-normal">Last trade</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r, i) => (
-          <tr key={r.address} className="border-b border-line transition-colors hover:bg-white/[0.03]">
-            <td className="num py-3.5 pr-3 text-sm text-dim">{i + 1}</td>
-            <td className="num px-3 py-3.5 text-sm">
-              <a
-                href={explorerAccount(r.address)}
-                target="_blank"
-                rel="noreferrer"
-                className="underline decoration-white/30 underline-offset-4 hover:decoration-white"
-              >
-                {shortAddr(r.address, 6, 4)}
-              </a>
-            </td>
-            <td className="px-3 py-3.5">
-              <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${TIER_CLS[r.tier]}`}>
-                {r.tier}
-              </span>
-            </td>
-            <td className="num px-3 py-3.5 text-right text-sm">{r.score}</td>
-            <td className={`num px-3 py-3.5 text-right text-sm ${toneClass(r.realisedUsd)}`}>
-              +{fmtUsd(r.realisedUsd)}
-              {r.partial && <span title="Sold tokens bought before this data window"> †</span>}
-            </td>
-            <td className={`num px-3 py-3.5 text-right text-sm ${toneClass(r.recentRealisedUsd)}`}>
-              {r.recentRealisedUsd === 0
-                ? "0"
-                : `${r.recentRealisedUsd > 0 ? "+" : "-"}${fmtUsd(Math.abs(r.recentRealisedUsd))}`}
-            </td>
-            <td className="num px-3 py-3.5 text-right text-sm">{Math.round(r.winRate * 100)}%</td>
-            <td className="num px-3 py-3.5 text-right text-sm text-dim">{r.tokensClosed}</td>
-            <td className="py-3.5 pl-3 text-right text-sm text-dim">{fmtAgo(r.lastActiveAt)}</td>
-          </tr>
-        ))}
-      </tbody>
-      <tfoot>
-        <tr>
-          <td colSpan={9} className="pt-4 text-xs leading-relaxed text-faint">
-            Profit is realised only: the sold part of a position against the wallet&apos;s average buy price.
-            A dagger marks a wallet that also sold tokens bought before this window; only the part with a known
-            buy is counted. A loss in the recent window lowers a score. A recent gain does not raise it.
-          </td>
-        </tr>
-      </tfoot>
-    </TableWrap>
-  );
+function WalletRow({ row: r, rank }: { row: LeaderRow; rank: number }) {
+  const [open, setOpen] = useState(false); const [copied, setCopied] = useState(false);
+  const copy = async () => { await navigator.clipboard.writeText(r.address); setCopied(true); window.setTimeout(() => setCopied(false), 1200); };
+  const basis = r.soldUsd - r.realisedUsd; const returnPct = basis > 0 ? (r.realisedUsd / basis) * 100 : null; const hold = r.firstBuyAt !== null && r.lastSellAt !== null ? fmtAge((r.lastSellAt - r.firstBuyAt) / 60000) : "n/a";
+  return <div className="border border-line"><button type="button" aria-expanded={open} onClick={() => setOpen((v) => !v)} className="flex w-full cursor-pointer items-center gap-3 p-4 text-left hover:bg-white/[0.03]"><span className="num w-6 text-sm text-faint">{rank}</span><span className="num min-w-0 flex-1 truncate text-sm">{shortAddr(r.address, 4, 4)}</span><span className={`rounded-full border px-2 py-0.5 text-xs font-semibold ${TIER_CLS[r.tier]}`}>{r.tier}</span><span className="num text-sm text-white">{r.score}</span><span aria-hidden>{open ? "⌃" : "⌄"}</span></button>
+    {open && <div className="grid gap-3 border-t border-line p-4 text-sm sm:grid-cols-2"><div className="flex flex-wrap items-center gap-3 sm:col-span-2"><span className="num break-all">{r.address}</span><button type="button" onClick={copy} className="cursor-pointer border border-line px-2 py-1 text-xs">{copied ? "Copied" : "Copy"}</button><a className="underline" href={explorerAccount(r.address)} target="_blank" rel="noreferrer">View on Suiscan</a></div><Detail label="Wins" value={`${r.wins} / ${r.soldTokens}`} /><Detail label="Win rate" value={`${Math.round(r.winRate * 100)}%${r.soldTokens === 1 ? " · limited history" : ""}`} /><Detail label="Return" value={fmtPct(returnPct)} /><Detail label="Realised P&L" value={`+${fmtUsd(r.realisedUsd)}`} /><Detail label="Trades per day" value={String(r.trades)} /><Detail label="Avg hold" value={hold} /></div>}
+  </div>;
 }
+function Detail({ label, value }: { label: string; value: string }) { return <div><div className="text-xs text-faint">{label}</div><div className="num mt-1 text-white">{value}</div></div>; }

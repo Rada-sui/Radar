@@ -184,6 +184,18 @@ describe("gradeWallets", () => {
     assert.deepEqual(ranked.map((r) => r.address), ["0xhigh", "0xlow"]);
   });
 
+  it("smooths small win samples so 1/1 does not outrank 50/73", () => {
+    const one = gradeWallets([base({ address: "one", wins: 1, tokensClosed: 1, realised: 1000, soldMatchedUsd: 2000 })]).ranked[0];
+    const many = gradeWallets([base({ address: "many", wins: 50, tokensClosed: 73, realised: 1000, soldMatchedUsd: 2000 })]).ranked[0];
+    assert.ok(many.score > one.score);
+  });
+
+  it("enforces sold-token minimums for tiers", () => {
+    assert.equal(tierOf(100, 1, 1), "Silver");
+    assert.equal(tierOf(100, 1, 2), "Gold");
+    assert.equal(tierOf(100, 1, 3), "Diamond");
+  });
+
   it("flags a wallet that sold tokens bought before the window as partial", () => {
     const { ranked } = gradeWallets([base({ unmatchedTokens: 10 })]);
     assert.equal(ranked[0].partial, true);

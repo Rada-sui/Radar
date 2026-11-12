@@ -59,12 +59,16 @@ export type LeaderRow = {
   recentRealisedUsd: number;
   /** Share of closed tokens that made money, 0 to 1. */
   winRate: number;
+  wins: number;
+  soldTokens: number;
   tokensClosed: number;
   tokensTraded: number;
   trades: number;
   boughtUsd: number;
   soldUsd: number;
   lastActiveAt: number;
+  firstBuyAt: number | null;
+  lastSellAt: number | null;
   /** True when the wallet sold tokens it bought before the data window. */
   partial: boolean;
 };

@@ -179,8 +179,9 @@ export function gradeWallets(pnls: WalletPnl[]): Graded {
     }
 
     const winRate = p.wins / p.tokensClosed;
+    const smoothedWinRate = (p.wins + 1) / (p.tokensClosed + 2);
     const profitPart = clamp(Math.log10(p.realised + 1) / 4, 0, 1) * 60;
-    const winPart = winRate * 25;
+    const winPart = smoothedWinRate * 25;
     const evidencePart = (Math.min(p.tokensClosed, 5) / 5) * 15;
     let score = profitPart + winPart + evidencePart;
 
@@ -198,12 +199,16 @@ export function gradeWallets(pnls: WalletPnl[]): Graded {
       realisedUsd: p.realised,
       recentRealisedUsd: p.recentRealised,
       winRate,
+      wins: p.wins,
+      soldTokens: p.tokensClosed,
       tokensClosed: p.tokensClosed,
       tokensTraded: p.tokensTraded,
       trades: p.buys + p.sells,
       boughtUsd: p.boughtUsd,
       soldUsd: p.soldUsd,
       lastActiveAt: p.lastTs,
+      firstBuyAt: p.firstBuyAt,
+      lastSellAt: p.lastSellAt,
       partial: p.unmatchedTokens > 0,
     });
   }

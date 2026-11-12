@@ -11,7 +11,8 @@ import { computePnl, gradeWallets, type PnlTrade } from "./pnl";
  * number of pools is capped to stay inside the free rate limit and leave
  * room for X-Ray scans.
  */
-const MAX_POOLS = 12;
+// Leave room in GeckoTerminal's rolling budget for the other platform feeds.
+const MAX_POOLS = 8;
 const WINDOW_HOURS = 24;
 const RECENT_HOURS = 6;
 const BOARD_TTL_MS = 10 * 60_000;
@@ -29,9 +30,9 @@ export function scanCounts(total: number, selected: number, failed: number) {
   };
 }
 
-type Memo = { at: number; value: LeaderBoard | null; building: Promise<LeaderBoard> | null };
+type Memo = { at: number; value: LeaderBoard | null; building: Promise<LeaderBoard> | null; failedAt: number };
 const g = globalThis as unknown as { __radarBoard?: Memo };
-const memo: Memo = (g.__radarBoard ??= { at: 0, value: null, building: null });
+const memo: Memo = (g.__radarBoard ??= { at: 0, value: null, building: null, failedAt: 0 });
 
 async function pickPools(): Promise<{ pools: RadarToken[]; total: number; skipped: number }> {
   const lists = await Promise.allSettled([topTokens(), trendingTokens("1h"), newTokens()]);
@@ -101,6 +102,15 @@ export async function getLeaderBoard(): Promise<LeaderResponse> {
   const now = Date.now();
   const fresh = memo.value && now - memo.at < BOARD_TTL_MS;
 
+  // Do not turn an upstream outage or rate limit into a retry storm. The
+  // shared Gecko budget is also used by Radar, Launches and Reports.
+  if (!fresh && !memo.value && memo.failedAt && now - memo.failedAt < 30_000) {
+    return {
+      ok: false,
+      error: "The leaderboard data source is busy. Try again in a few seconds.",
+    };
+  }
+
   if (!fresh && !memo.building) {
     memo.building = build()
       .then((v) => {
@@ -112,7 +122,9 @@ export async function getLeaderBoard(): Promise<LeaderResponse> {
         memo.building = null;
       });
     // A background rebuild that fails must not become an unhandled rejection.
-    memo.building.catch(() => {});
+    memo.building.catch(() => {
+      memo.failedAt = Date.now();
+    });
   }
 
   if (memo.value && !fresh && memo.building) return { ok: true, board: memo.value };
@@ -122,6 +134,7 @@ export async function getLeaderBoard(): Promise<LeaderResponse> {
     const board = await memo.building!;
     return { ok: true, board };
   } catch {
+    memo.failedAt = Date.now();
     return {
       ok: false,
       error: "The free data sources could not supply enough trades to build the board. Try again in a minute.",
