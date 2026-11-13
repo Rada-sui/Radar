@@ -214,6 +214,8 @@ describe("tierOf", () => {
 describe("token wallet ranking and show counts", () => {
   it("does not round small profitable ROIs down to 1.0x", () => {
     assert.equal(fmtRoi(1.04), "1.04x");
+    assert.equal(fmtRoi(1.004), "1.004x");
+    assert.equal(fmtRoi(1.00001), ">1x");
     assert.equal(fmtRoi(1.4), "1.4x");
     assert.equal(fmtRoi(6), "6.0x");
   });

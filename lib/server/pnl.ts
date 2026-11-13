@@ -144,6 +144,24 @@ function clamp(n: number, lo: number, hi: number) {
   return Math.min(hi, Math.max(lo, n));
 }
 
+/**
+ * The 0 to 100 score: up to 60 for realised profit (log scale), 25 for a smoothed win rate and 15 for
+ * evidence (closed tokens, up to 5). Rule 3: a loss in the recent window pulls the score down by up to
+ * 40%; a recent gain does nothing. Shared by the 24h board and the whole-history board.
+ */
+export function scoreOf(realised: number, recentRealised: number, wins: number, tokensClosed: number): number {
+  const smoothedWinRate = (wins + 1) / (tokensClosed + 2);
+  const profitPart = clamp(Math.log10(realised + 1) / 4, 0, 1) * 60;
+  const winPart = smoothedWinRate * 25;
+  const evidencePart = (Math.min(tokensClosed, 5) / 5) * 15;
+  let score = profitPart + winPart + evidencePart;
+  if (recentRealised < 0) {
+    const drag = Math.min(0.4, (Math.abs(recentRealised) / Math.max(realised, 1)) * 0.5);
+    score *= 1 - drag;
+  }
+  return Math.round(clamp(score, 0, 100));
+}
+
 export function tierOf(score: number, winRate: number, tokensClosed: number): Tier {
   if (score >= 75 && tokensClosed >= 3 && winRate >= 0.6) return "Diamond";
   if (score >= 55 && tokensClosed >= 2 && winRate >= 0.5) return "Gold";
@@ -179,18 +197,7 @@ export function gradeWallets(pnls: WalletPnl[]): Graded {
     }
 
     const winRate = p.wins / p.tokensClosed;
-    const smoothedWinRate = (p.wins + 1) / (p.tokensClosed + 2);
-    const profitPart = clamp(Math.log10(p.realised + 1) / 4, 0, 1) * 60;
-    const winPart = smoothedWinRate * 25;
-    const evidencePart = (Math.min(p.tokensClosed, 5) / 5) * 15;
-    let score = profitPart + winPart + evidencePart;
-
-    // Rule 3: a loss in the recent window pulls the score down. A gain does nothing.
-    if (p.recentRealised < 0) {
-      const drag = Math.min(0.4, (Math.abs(p.recentRealised) / Math.max(p.realised, 1)) * 0.5);
-      score *= 1 - drag;
-    }
-    score = Math.round(clamp(score, 0, 100));
+    const score = scoreOf(p.realised, p.recentRealised, p.wins, p.tokensClosed);
 
     ranked.push({
       address: p.address,

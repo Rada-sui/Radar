@@ -49,6 +49,7 @@ No API keys are needed.
 app/                  Pages and API routes (/api/radar, /api/xray, /api/leaderboard, /api/report)
 components/           UI. Header (hamburger menu), Reveal (scroll-driven reveal), RadarSweep (canvas)
 lib/server/
+  tide.ts             Optional Tide client (off without a key), tide-parse.ts is the pure parsing
   cache.ts            Shared fetch layer: TTL cache, request de-duplication, per-minute budget, stale fallback
   gecko.ts            GeckoTerminal client (trending, new, top pools, token info, pool trades)
   dexscreener.ts      DexScreener client (pairs, profile info)
@@ -87,10 +88,44 @@ These come from using only free sources.
 
 ## Environment variables
 
-Both optional. They point the data layer at a different host, for example the mock feed.
+All optional. Copy `.env.example` to `.env.local` to set them.
 
 - `GECKO_BASE` default `https://api.geckoterminal.com/api/v2`
 - `DEXSCREENER_BASE` default `https://api.dexscreener.com`
+- `TIDE_API_KEY` switches on the Tide source (below). Empty means off.
+- `TIDE_BASE` default `https://api.tide.ad`
+- `TIDE_DAILY_CREDITS` Radar's own ceiling on Tide credits per UTC day, default 100000.
+
+### Tide (optional)
+
+[Tide](https://tide.ad) is a Sui data API with a free key (no email, https://tide.ad/developers/keys). With
+`TIDE_API_KEY` set, X-Ray adds:
+
+- **Whole history in this token** for profitable wallets found from Tide's all-time token trade history, shown in
+  the expanded row. GeckoTerminal supplies market and pool context only.
+- **Holder concentration** in the trap check (`coins.holders`, 5 credits), with pools and contracts left out.
+
+- **Leaderboard on whole history.** Tide cannot list wallets, so the 24h GeckoTerminal trades still find the
+  wallets that were profitable today (top 30). Each is then looked up with `wallet.pnl` (up to 4 pages, 10 credits
+  a page) and ranked on realised profit across every coin it ever sold. Win rate is winning coins over coins
+  sold, e.g. 50 / 73. The same score and tier rules apply, a wallet whose history could not be read in full is
+  marked partial and capped at Silver, and the board refreshes every 30 minutes. A rebuild costs up to about
+  1,200 credits, so a day of rebuilds stays near 58,000, inside the 100,000 daily ceiling.
+- **Fallback.** With no key, with Tide down, or with fewer than 5 wallets answered, the leaderboard is the 24h
+  board as before.
+
+A scan costs about 105 credits. Tide never blocks X-Ray: if it is off, slow (8s cap), out of credits or
+returns something unexpected, the page is the same as without it. Tide does not offer a time window for profit,
+so these figures are all-time. There is no 7 or 30 day view from Tide; that still needs saved snapshots or an indexer.
+
+Tide's docs do not publish a JSON schema, so the parsers in `lib/server/tide-parse.ts` were written from the
+documented field names and are strict: unrecognised data is dropped, never guessed. Check them against the real
+service once:
+
+```bash
+TIDE_API_KEY=... node tools/tide-probe.mjs 0x…::module::TOKEN
+npm test        # now also parses the saved real responses in tests/fixtures/tide/
+```
 
 ### Offline development with the mock feed
 

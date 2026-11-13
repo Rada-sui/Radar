@@ -125,6 +125,49 @@ const server = http.createServer((req, res) => {
       },
     ]);
   }
+  // Tide (tide.ad) stand-in. The field names follow Tide's docs; the JSON layout is an assumption,
+  // so this proves Radar's wiring, not Tide's real format. Use tools/tide-probe.mjs for that.
+  if (p.startsWith("/v1/coins/") && p.endsWith("/holders")) {
+    if (req.headers["x-api-key"] !== "mock-key") return send(401, { error: "invalid_key" });
+    const rows = [{ rank: 1, owner: "0xpool0", pctSupply: 31.2, kind: "pool" }];
+    for (let i = 0; i < 12; i++) rows.push({ rank: i + 2, owner: `0xholder${i}`, pctSupply: i === 0 ? 14.5 : 4.2, kind: "wallet" });
+    return send(200, { holders: rows, asOf: "mock" });
+  }
+  const mAll = p.match(/^\/v1\/wallet\/([^/]+)\/pnl$/);
+  if (mAll) {
+    if (req.headers["x-api-key"] !== "mock-key") return send(401, { error: "invalid_key" });
+    // Deterministic per wallet. Six coins over two pages of four, so paging is exercised.
+    const seed = [...decodeURIComponent(mAll[1])].reduce((n, c) => n + c.charCodeAt(0), 0);
+    const losing = seed % 7 === 0;
+    const all = Array.from({ length: 6 }, (_, i) => {
+      const win = (seed + i) % 3 !== 0;
+      const size = 40 + ((seed * (i + 3)) % 400);
+      const realized = losing ? (win ? size * 0.2 : -size * 3) : win ? size * (1 + (seed % 5)) : -size * 0.4;
+      return { coin: { type: `0xcoin${i}::c::C${i}`, symbol: `C${i}` }, realizedUsd: Math.round(realized * 100) / 100, unrealizedUsd: 5, totalUsd: realized + 5, volumeUsd: size * 10 };
+    });
+    const start = u.searchParams.get("cursor") === "p2" ? 4 : 0;
+    const rows = all.slice(start, start + 4);
+    return send(200, { rows, nextCursor: start === 0 ? "p2" : null });
+  }
+  const mPnl = p.match(/^\/v1\/wallet\/([^/]+)\/pnl\/(.+)$/);
+  if (mPnl) {
+    if (req.headers["x-api-key"] !== "mock-key") return send(401, { error: "invalid_key" });
+    return send(200, {
+      bought: { amount: "52000", usd: 410.5, swaps: 5 },
+      sold: { amount: "30000", usd: 520.25, swaps: 3 },
+      avgBuyUsd: 0.0079,
+      avgSellUsd: 0.0173,
+      realizedUsd: 283.6,
+      unrealizedUsd: 96.4,
+      pnlUsd: 380,
+      roiPct: 92.6,
+      status: "holding",
+      firstBuy: new Date(now - 9 * 86_400_000).toISOString(),
+      lastTrade: new Date(now - 3 * 3_600_000).toISOString(),
+      complete: true,
+      notes: [],
+    });
+  }
   send(404, { error: "not mocked", path: p });
 });
 

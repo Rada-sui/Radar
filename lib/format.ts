@@ -45,5 +45,8 @@ export function toneClass(n: number | null | undefined): string {
 export function fmtRoi(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "n/a";
   if (n >= 2) return `${n.toFixed(1)}x`;
-  return `${n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}x`;
+  const rounded = n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
+  // Do not make a genuinely profitable wallet look exactly breakeven because
+  // display rounding erased the small difference above 1.0.
+  return n > 1 && Number(rounded) <= 1 ? ">1x" : `${rounded}x`;
 }

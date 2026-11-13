@@ -69,8 +69,12 @@ export type LeaderRow = {
   lastActiveAt: number;
   firstBuyAt: number | null;
   lastSellAt: number | null;
-  /** True when the wallet sold tokens it bought before the data window. */
+  /** True when the wallet sold tokens it bought before the data window, or Tide could not read all of its history. */
   partial: boolean;
+  /** What the figures cover. Absent means "24h" (older responses). */
+  basis?: "24h" | "lifetime";
+  /** Realised profit in the last 24h, kept alongside the whole-history figure on the Tide board. */
+  realised24hUsd?: number;
 };
 
 export type LeaderBoard = {
@@ -89,6 +93,10 @@ export type LeaderBoard = {
     recentHours: number;
     droppedBots: number;
     droppedInconsistent: number;
+    /** What the ranking figures cover. Absent means "24h". */
+    basis?: "24h" | "lifetime";
+    /** Present when Tide was used to rank on whole history. */
+    tide?: { candidates: number; answered: number; incomplete: number; dropped: number };
   };
   updatedAt: number;
 };
@@ -120,6 +128,49 @@ export type XRayCheck = {
   detail: string;
 };
 
+/** One wallet's whole history in this token, from Tide (not limited to the 24h window). */
+export type TideLifetime = {
+  realisedUsd: number | null;
+  unrealisedUsd: number | null;
+  pnlUsd: number | null;
+  /** Total profit as a percentage of the USD spent buying. */
+  roiPct: number | null;
+  boughtUsd: number | null;
+  soldUsd: number | null;
+  swaps: number | null;
+  avgBuyUsd: number | null;
+  avgSellUsd: number | null;
+  status: "holding" | "exited" | "none" | null;
+  firstBuyAt: number | null;
+  lastTradeAt: number | null;
+  /** False while Tide is still reading the wallet's history. */
+  complete: boolean | null;
+  notes: string[];
+};
+
+export type TideHolder = {
+  rank: number;
+  address: string;
+  label: string | null;
+  /** Share of supply as a percentage, 0 to 100. */
+  pctSupply: number;
+  valueUsd: number | null;
+  kind: string | null;
+};
+
+export type TideHolders = {
+  holders: TideHolder[];
+  /** Biggest holder that is not a pool or contract, as a percentage of supply. */
+  topOnePct: number | null;
+  /** Ten biggest such holders, as a percentage of supply. Null when fewer than ten were returned. */
+  topTenPct: number | null;
+  /** Holders left out because they are pools or contracts. */
+  excluded: number;
+};
+
+/** off: no key set. ok: everything asked for came back. partial: some of it did. unavailable: none of it. */
+export type TideStatus = "off" | "ok" | "partial" | "unavailable";
+
 export type XRayWallet = {
   address: string;
   tier: Tier;
@@ -138,6 +189,8 @@ export type XRayWallet = {
   averageExitUsd: number | null;
   holdTimeMs: number | null;
   partial: boolean;
+  /** Whole-history figures for this token from Tide. Absent when Tide is off or has no answer for the wallet. */
+  lifetime?: TideLifetime | null;
 };
 
 /** Internal activity summary used by the trap-check calculations. */
@@ -199,6 +252,8 @@ export type XRayResult = {
   checks: XRayCheck[];
   wallets: XRayWallet[];
   scan: { trades: number; walletsRead: number };
+  /** Optional Tide enrichment. Absent on older responses. */
+  tide?: { status: TideStatus; holders: TideHolders | null; walletsChecked: number };
   updatedAt: number;
 };
 

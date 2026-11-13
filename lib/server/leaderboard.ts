@@ -3,6 +3,8 @@ import type { LeaderBoard, LeaderResponse, RadarToken } from "@/lib/types";
 import { parseTrades } from "./analysis";
 import { newTokens, poolTrades, topTokens, trendingTokens } from "./gecko";
 import { computePnl, gradeWallets, type PnlTrade } from "./pnl";
+import { tideEnabled, tideWalletBatch } from "./tide";
+import { gradeLifetime } from "./tide-board";
 
 /**
  * Builds the wallet board from the free GeckoTerminal trade feed.
@@ -17,6 +19,12 @@ const WINDOW_HOURS = 24;
 const RECENT_HOURS = 6;
 const BOARD_TTL_MS = 10 * 60_000;
 const BOARD_SIZE = 50;
+/** The whole-history board costs Tide credits, so it refreshes less often. */
+const TIDE_BOARD_TTL_MS = 30 * 60_000;
+/** Wallets sent to Tide per rebuild (each costs up to 4 pages, 10 credits a page). */
+const TIDE_CANDIDATES = 30;
+/** Below this many answers the Tide board is not trustworthy, so the 24h board is served instead. */
+const TIDE_MIN_ANSWERS = 5;
 
 export function scanCounts(total: number, selected: number, failed: number) {
   const safeTotal = Math.max(0, total);
@@ -54,6 +62,7 @@ async function pickPools(): Promise<{ pools: RadarToken[]; total: number; skippe
 }
 
 async function build(): Promise<LeaderBoard> {
+  if (!tideEnabled()) throw new Error("Tide is not configured; set TIDE_API_KEY to build the wallet leaderboard.");
   const selection = await pickPools();
   const pools = selection.pools;
   if (pools.length === 0) throw new Error("no pools");
@@ -82,9 +91,28 @@ async function build(): Promise<LeaderBoard> {
   const pnls = computePnl(all, now - RECENT_HOURS * 3_600_000);
   const graded = gradeWallets(pnls);
 
+  // Gecko identifies candidate wallets from recent pool trades; Tide is the
+  // authoritative source for their whole-history wallet performance.
+  let rows = graded.ranked.slice(0, BOARD_SIZE);
+  let basis: "24h" | "lifetime" = "24h";
+  let tide: NonNullable<LeaderBoard["scan"]["tide"]> | undefined;
+  if (tideEnabled() && graded.ranked.length > 0) {
+    const candidates = graded.ranked.slice(0, TIDE_CANDIDATES);
+    const stats = await tideWalletBatch(candidates.map((c) => c.address));
+    const lifetime = gradeLifetime(candidates, stats);
+    tide = { candidates: candidates.length, answered: lifetime.answered, incomplete: lifetime.incomplete, dropped: lifetime.dropped };
+    if (lifetime.answered < TIDE_MIN_ANSWERS || lifetime.rows.length === 0) {
+      throw new Error(`Tide answered only ${lifetime.answered} of ${candidates.length} wallet checks.`);
+    }
+    rows = lifetime.rows.slice(0, BOARD_SIZE);
+    basis = "lifetime";
+  }
+
   return {
-    rows: graded.ranked.slice(0, BOARD_SIZE),
+    rows,
     scan: {
+      basis,
+      tide,
       ...scanCounts(selection.total, pools.length, failed),
       trades: all.length,
       wallets: pnls.length,
@@ -100,7 +128,8 @@ async function build(): Promise<LeaderBoard> {
 /** Serves the cached board, rebuilding in the background once it is stale. */
 export async function getLeaderBoard(): Promise<LeaderResponse> {
   const now = Date.now();
-  const fresh = memo.value && now - memo.at < BOARD_TTL_MS;
+  const ttl = memo.value?.scan.basis === "lifetime" ? TIDE_BOARD_TTL_MS : BOARD_TTL_MS;
+  const fresh = memo.value && now - memo.at < ttl;
 
   // Do not turn an upstream outage or rate limit into a retry storm. The
   // shared Gecko budget is also used by Radar, Launches and Reports.

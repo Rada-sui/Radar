@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { fmtAge, fmtAgo, fmtPct, fmtRoi, fmtUsd, shortAddr, toneClass } from "@/lib/format";
 import { explorerAccount, explorerCoin } from "@/lib/sui";
-import type { CheckLevel, XRayCheck, XRayResponse, XRayResult, XRayWallet } from "@/lib/types";
+import type { CheckLevel, TideLifetime, XRayCheck, XRayResponse, XRayResult, XRayWallet } from "@/lib/types";
 import { ShowCount } from "./ui";
 
 type Loaded = { key: string; res: XRayResponse };
@@ -206,7 +206,8 @@ function Report({ r }: { r: XRayResult }) {
       )}
 
       <p className="num text-xs text-faint">
-        Updated {new Date(r.updatedAt).toLocaleTimeString()}. Sources: GeckoTerminal, DexScreener.
+        Updated {new Date(r.updatedAt).toLocaleTimeString()}. Sources: GeckoTerminal, DexScreener
+        {r.tide && (r.tide.status === "ok" || r.tide.status === "partial") ? ", Tide" : ""}.
       </p>
     </div>
   );
@@ -234,6 +235,7 @@ function WalletRow({ wallet: w, open, onToggle }: { wallet: XRayWallet; open: bo
             <Stat label="Last sell" value={fmtAgo(w.lastSellAt)} />
             <Stat label="Hold time" value={hold} />
           </dl>
+          {w.lifetime && <Lifetime l={w.lifetime} />}
           <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-dim">
             <span className="num break-all">{w.address}</span>
             <button type="button" className="cursor-pointer underline underline-offset-4" onClick={() => void navigator.clipboard?.writeText(w.address)}>Copy</button>
@@ -241,6 +243,30 @@ function WalletRow({ wallet: w, open, onToggle }: { wallet: XRayWallet; open: bo
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function Lifetime({ l }: { l: TideLifetime }) {
+  const tone = (n: number | null) => (n === null ? undefined : n > 0 ? "text-gain" : n < 0 ? "text-loss" : undefined);
+  return (
+    <div className="mt-5 border-t border-line pt-4">
+      <p className="text-sm font-medium">Whole history in this token</p>
+      <p className="mt-1 text-xs text-dim">From Tide. Not limited to the last 24 hours.</p>
+      <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Stat label="Realised profit" value={fmtUsd(l.realisedUsd)} tone={tone(l.realisedUsd)} />
+        <Stat label="Still held (unrealised)" value={fmtUsd(l.unrealisedUsd)} tone={tone(l.unrealisedUsd)} />
+        <Stat label="Total profit" value={fmtUsd(l.pnlUsd)} tone={tone(l.pnlUsd)} />
+        <Stat label="Return on spend" value={fmtPct(l.roiPct)} tone={tone(l.roiPct)} />
+        <Stat label="Bought" value={fmtUsd(l.boughtUsd)} />
+        <Stat label="Sold" value={fmtUsd(l.soldUsd)} />
+        <Stat label="First buy" value={fmtAgo(l.firstBuyAt)} />
+        <Stat label="Last trade" value={fmtAgo(l.lastTradeAt)} />
+      </dl>
+      {l.complete === false && (
+        <p className="mt-3 text-xs text-dim">Tide is still reading this wallet&apos;s history, so these figures may be incomplete.</p>
+      )}
+      {l.notes.length > 0 && <p className="mt-3 text-xs text-dim">{l.notes.join(" ")}</p>}
     </div>
   );
 }

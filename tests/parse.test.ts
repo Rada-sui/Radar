@@ -195,9 +195,12 @@ describe("live API fixtures", () => {
     const tradeDoc = read("pool-trades.json") as unknown as { data: { attributes: Record<string, unknown> }[] };
     const trades = parseTrades(tradeDoc.data.map((x) => x.attributes), coin);
     assert.ok(trades.length > 0);
-    assert.equal(trades[0].side, "buy");
-    assert.equal(trades[0].tokens, 509.308533);
-    assert.equal(trades[0].usd, 7.04338658604747);
+    // parseTrades returns oldest first, so find the saved trade by its transaction id.
+    const buy = trades.find((t) => t.tx === "CgYtisp2BDkpk3KcvtP2Z6rhiS3bbLsThTWHt9Y9scN1");
+    assert.ok(buy);
+    assert.equal(buy.side, "buy");
+    assert.equal(buy.tokens, 509.308533);
+    assert.equal(buy.usd, 7.04338658604747);
   });
 
   it("parses live DexScreener pairs with numeric fields and profile links", () => {
