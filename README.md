@@ -105,16 +105,10 @@ All optional. Copy `.env.example` to `.env.local` to set them.
   the expanded row. GeckoTerminal supplies market and pool context only.
 - **Holder concentration** in the trap check (`coins.holders`, 5 credits), with pools and contracts left out.
 
-- **Leaderboard on whole history.** Tide cannot list wallets, so the 24h GeckoTerminal trades still find the
-  wallets that were profitable today (top 30). Each is then looked up with `wallet.pnl` (up to 4 pages, 10 credits
-  a page) and ranked on realised profit across every coin it ever sold. Win rate is winning coins over coins
-  sold, e.g. 50 / 73. The same score and tier rules apply, a wallet whose history could not be read in full is
-  marked partial and capped at Silver, and the board refreshes every 30 minutes. A rebuild costs up to about
-  1,200 credits, so a day of rebuilds stays near 58,000, inside the 100,000 daily ceiling.
-- **Fallback.** With no key, with Tide down, or with fewer than 5 wallets answered, the leaderboard is the 24h
-  board as before.
+- **Leaderboard.** The leaderboard is currently GeckoTerminal/Dex market-data-only and ranks profitable wallets
+  visible in the recent trade feed. It does not consume Tide credits.
 
-A scan costs about 105 credits. Tide never blocks X-Ray: if it is off, slow (8s cap), out of credits or
+A scan costs about 55-60 credits before SQL data-read charges. Tide never blocks the market-only leaderboard: if it is off, slow, out of credits or
 returns something unexpected, the page is the same as without it. Tide does not offer a time window for profit,
 so these figures are all-time. There is no 7 or 30 day view from Tide; that still needs saved snapshots or an indexer.
 

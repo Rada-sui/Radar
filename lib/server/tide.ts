@@ -28,7 +28,8 @@ const dailyCredits = () => (Number(process.env.TIDE_DAILY_CREDITS) > 0 ? Number(
 const PER_MINUTE = 90;
 
 /** How many of the top wallets get a whole-history lookup per scan (10 credits each). */
-export const WALLET_LOOKUPS = 10;
+/** Keep X-Ray enrichment affordable; the full candidate set is still ranked locally. */
+export const WALLET_LOOKUPS = 5;
 const CONCURRENCY = 3;
 /** X-Ray never waits longer than this for Tide; whatever has arrived by then is used. */
 const DEADLINE_MS = 8_000;
