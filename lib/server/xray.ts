@@ -1,10 +1,10 @@
 import "server-only";
 import { isCoinType, isSuiAddress } from "@/lib/sui";
 import type { XRayResponse, XRayResult, XRayWallet } from "@/lib/types";
-import { aggregateWallets, computeChecks, coverageOf, summarise } from "./analysis";
+import { aggregateWallets, computeChecks, coverageOf, parseTrades, summarise } from "./analysis";
 import { UpstreamError } from "./cache";
 import { tokenPairs } from "./dexscreener";
-import { tokenInfo } from "./gecko";
+import { poolTrades, tokenInfo } from "./gecko";
 import { computePnl, rankTokenWallets } from "./pnl";
 import { enrichWithTide, tideCoinTrades, tideEnabled } from "./tide";
 import { holderCheck } from "./tide-parse";
@@ -73,10 +73,19 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
   const ageMinutes = best?.createdAt ? Math.max(0, (Date.now() - best.createdAt) / 60_000) : null;
   const priceUsd = info?.priceUsd ?? best?.priceUsd ?? null;
 
-  // Tide supplies the token-wide all-time trade history. Do not silently fall
+  let rawTrades: Record<string, unknown>[] | null = null;
+  let tradesFailed = false;
+  try {
+    rawTrades = await poolTrades(poolAddress, coinType);
+  } catch {
+    tradesFailed = true;
+  }
+
+  // Tide supplies the token-wide 30-day trade history. Do not silently fall
   // back to Gecko here: its free feed is capped and would violate X-Ray's
-  // all-time wallet contract.
+  // 30-day wallet contract.
   let tideTrades: Awaited<ReturnType<typeof tideCoinTrades>> = null;
+  let usedGeckoFallback = false;
   try {
     tideTrades = await tideCoinTrades(coinType);
   } catch (error) {
@@ -87,16 +96,11 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
       };
     }
   }
-  if (tideTrades === null) {
-    return {
-      body: { ok: false, code: "upstream", error: "Tide could not load the all-time trade history for this token. Try again shortly." },
-      status: 502,
-    };
-  }
-  const trades = tideTrades;
+  const trades = tideTrades ?? (rawTrades ? parseTrades(rawTrades, coinType) : []);
+  usedGeckoFallback = tideTrades === null;
   const wallets = aggregateWallets(trades, priceUsd);
   const summary = trades.length ? summarise(trades, wallets) : null;
-  const pnlRows = computePnl(trades.map((trade) => ({ ...trade, token: coinType })), 0);
+  const pnlRows = computePnl(trades.map((trade) => ({ ...trade, token: coinType })), Date.now() - 30 * 86_400_000);
   const profitableWallets: XRayWallet[] = rankTokenWallets(pnlRows).map((wallet) => ({
     address: wallet.address,
     tier: wallet.tier,
@@ -124,7 +128,7 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
   );
   // A token with no locally observed profitable wallets is still a valid X-Ray
   // result. Tide is only required to enrich wallets that we actually found.
-  if (profitableWallets.length > 0 && (tide.status === "unavailable" || tide.walletsChecked === 0)) {
+  if (!usedGeckoFallback && profitableWallets.length > 0 && (tide.status === "unavailable" || tide.walletsChecked === 0)) {
     return {
       body: { ok: false, code: "upstream", error: "Tide wallet-performance data was unavailable for the wallets found in this scan. Try again shortly." },
       status: 502,
@@ -136,6 +140,11 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
   }
   const holderRow = holderCheck(tide.holders);
   const coverage = coverageOf(trades, ageMinutes);
+  if (usedGeckoFallback) {
+    coverage.note = "Tide 30-day history was unavailable, so this scan uses GeckoTerminal's limited recent trade feed.";
+  } else if (tradesFailed) {
+    coverage.note = "Trade history could not be loaded right now, so buyer details are missing. Try again in a minute.";
+  }
   const marketCap = info?.marketCap ?? best?.marketCap ?? null;
   const liquidityUsd = best?.liquidityUsd ?? info?.liquidityUsd ?? null;
   const hasProfile = best ? best.hasProfile : null;

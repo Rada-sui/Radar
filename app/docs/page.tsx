@@ -109,7 +109,7 @@ export default function DocsPage() {
         <List
           items={[
             "The free trade feed returns each pool's latest 300 trades from the last 24 hours. For busy or older pools, buyers are the earliest in that window, not the first ever. X-Ray says which case applies.",
-            "X-Ray uses Tide's token-wide all-time trade history to find profitable wallet addresses beyond GeckoTerminal's limited free feed. Wallet performance is ranked on realised profit across the wallet's whole history.",
+            "X-Ray uses Tide's token-wide 30-day trade history to find profitable wallet addresses beyond GeckoTerminal's limited free feed. Wallet performance is ranked on realised profit within that 30-day scan window.",
             "Wallets with more than 150 trades in a day are left out as likely bots or routers.",
             "Trades are attributed to the wallet that sent the transaction. One person can use many wallets.",
             "Bundled buys, sniper and insider share, and a dev's past launches need on-chain indexing that Radar does not do yet.",

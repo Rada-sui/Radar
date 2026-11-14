@@ -101,8 +101,8 @@ All optional. Copy `.env.example` to `.env.local` to set them.
 [Tide](https://tide.ad) is a Sui data API with a free key (no email, https://tide.ad/developers/keys). With
 `TIDE_API_KEY` set, X-Ray adds:
 
-- **Whole history in this token** for profitable wallets found from Tide's all-time token trade history, shown in
-  the expanded row. GeckoTerminal supplies market and pool context only.
+- **30-day history in this token** for profitable wallets found from Tide's token trade history, shown in the
+  expanded row. GeckoTerminal supplies market and pool context only.
 - **Holder concentration** in the trap check (`coins.holders`, 5 credits), with pools and contracts left out.
 
 - **Leaderboard.** The leaderboard is currently GeckoTerminal/Dex market-data-only and ranks profitable wallets

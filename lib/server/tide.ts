@@ -2,7 +2,7 @@ import "server-only";
 import { sameCoin } from "@/lib/sui";
 import type { Trade } from "./analysis";
 import type { TideHolders, TideLifetime, TideStatus } from "@/lib/types";
-import { fetchJson } from "./cache";
+import { fetchJson, UpstreamError } from "./cache";
 import { parseCoinPnl, parseHolders, parseWalletPnl, summariseWalletPnl, type WalletLifetime, type WalletPnlRow } from "./tide-parse";
 
 /*
@@ -76,6 +76,7 @@ type SqlResponse = {
   state?: string;
   is_execution_finished?: boolean;
   result?: { rows?: Record<string, unknown>[] };
+  error?: { message?: string };
 };
 
 /**
@@ -88,16 +89,28 @@ export async function tideCoinTrades(coinType: string): Promise<Trade[] | null> 
     token_sold_address, token_bought_address, token_sold_amount, token_bought_amount,
     token_sold_usd, token_bought_usd
     FROM dex.trades
-    WHERE token_sold_address = {{coin}} OR token_bought_address = {{coin}}
+    WHERE (token_sold_address = {{coin}} OR token_bought_address = {{coin}})
+      AND block_time >= now() - INTERVAL '30' DAY
     LIMIT 10000`;
-  const doc = await fetchJson<SqlResponse>(`${BASE}/v1/sql/execute`, {
-    bucket: "tide",
-    perMinute: PER_MINUTE,
-    ttlMs: TRADE_TTL,
-    method: "POST",
-    headers: { "x-api-key": KEY, "content-type": "application/json" },
-    body: JSON.stringify({ sql, dialect: "trino", wait_ms: 10_000, params: { coin: coinType } }),
-  });
+  let doc: SqlResponse | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    doc = await fetchJson<SqlResponse>(`${BASE}/v1/sql/execute`, {
+      bucket: "tide",
+      perMinute: PER_MINUTE,
+      ttlMs: TRADE_TTL,
+      method: "POST",
+      headers: { "x-api-key": KEY, "content-type": "application/json" },
+      // A comment makes each retry a distinct cache key, avoiding reuse of a
+      // transient QUERY_STATE_FAILED response from the shared fetch cache.
+      body: JSON.stringify({ sql: `${sql} /* retry ${attempt} */`, dialect: "trino", wait_ms: 20_000, params: { coin: coinType } }),
+    });
+    const message = doc?.error?.message ?? "";
+    if (!message.toLowerCase().includes("sql is busy")) break;
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+  }
+  if (doc?.error?.message?.toLowerCase().includes("sql is busy")) {
+    throw new UpstreamError("Tide public SQL is busy", "http", 503);
+  }
   let rows = doc?.result?.rows;
   let executionId = doc?.execution_id;
   let finished = doc?.is_execution_finished === true;
