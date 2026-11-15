@@ -114,7 +114,13 @@ export function computePnl(trades: PnlTrade[], recentSince: number): WalletPnl[]
       boughtTokens: w.boughtTokens,
       soldTokens: w.soldTokens,
       soldMatchedUsd: w.soldMatchedUsd,
-      roiMultiple: matchedCost > 0 ? w.soldMatchedUsd / matchedCost : null,
+      // Prefer matched-token cost. If matching could not establish a cost,
+      // retain a useful conservative display value from the wallet totals.
+      roiMultiple: matchedCost > 0
+        ? w.soldMatchedUsd / matchedCost
+        : w.boughtUsd > 0 && w.soldUsd > 0
+          ? w.soldUsd / w.boughtUsd
+          : null,
       buys: w.buys,
       sells: w.sells,
       tokensTraded: w.traded.size,

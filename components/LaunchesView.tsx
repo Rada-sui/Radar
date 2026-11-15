@@ -24,7 +24,7 @@ export default function LaunchesView() {
   const { data, error, loading, reload } = useFeed<RadarFeed>("/api/radar?view=new", 45_000);
   const [show, setShow] = useState(10);
 
-  if (loading) return <p className="text-dim">Loading new pools.</p>;
+  if (loading) return <p className="text-dim">Looking for newly published tokens.</p>;
   if (!data || !data.ok) {
     return (
       <Notice
@@ -34,7 +34,7 @@ export default function LaunchesView() {
       />
     );
   }
-  if (data.tokens.length === 0) return <p className="text-dim">No new pools to show right now.</p>;
+  if (data.tokens.length === 0) return <p className="text-dim">No newly published tokens found right now.</p>;
 
   return (
     <div>

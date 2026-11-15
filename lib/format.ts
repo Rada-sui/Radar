@@ -41,12 +41,8 @@ export function toneClass(n: number | null | undefined): string {
   return n > 0 ? "text-gain" : "text-loss";
 }
 
-/** Display ROI without rounding small profitable differences down to 1.0x. */
+/** Display ROI to two decimal places without exposing noisy calculation precision. */
 export function fmtRoi(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "n/a";
-  if (n >= 2) return `${n.toFixed(1)}x`;
-  const rounded = n.toFixed(4).replace(/0+$/, "").replace(/\.$/, "");
-  // Do not make a genuinely profitable wallet look exactly breakeven because
-  // display rounding erased the small difference above 1.0.
-  return n > 1 && Number(rounded) <= 1 ? ">1x" : `${rounded}x`;
+  return `${n.toFixed(2)}x`;
 }
