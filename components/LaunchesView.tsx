@@ -40,11 +40,11 @@ export default function LaunchesView() {
     <div>
       <div className="mb-4"><ShowCount count={data.tokens.length} value={show} onChange={setShow} /></div>
       <TableWrap min={820}>
-        <caption className="sr-only">Newly created Sui pools with quick checks</caption>
+        <caption className="sr-only">Sui tokens whose packages were published within the last 24 hours with quick checks</caption>
         <thead>
           <tr className="border-b border-line-strong text-sm text-faint">
             <th scope="col" className="py-3 pr-4 font-normal">Token</th>
-            <th scope="col" className="px-4 py-3 text-right font-normal">Age</th>
+            <th scope="col" className="px-4 py-3 text-right font-normal">Token age</th>
             <th scope="col" className="px-4 py-3 text-right font-normal">Market cap</th>
             <th scope="col" className="px-4 py-3 text-right font-normal">Liquidity</th>
             <th scope="col" className="px-4 py-3 text-right font-normal">Volume 1h</th>
@@ -77,7 +77,7 @@ export default function LaunchesView() {
         </tbody>
       </TableWrap>
       <p className="mt-4 max-w-2xl text-sm leading-relaxed text-faint">
-        Quick read uses list data only. Select a token to run the full trap check: top-buyer share, buys against
+        Only tokens whose packages were published within the last 24 hours are shown. Quick read uses list data only. Select a token to run the full trap check: top-buyer share, buys against
         sells, and what the first buyers did next.
       </p>
       <p className="num mt-2 text-xs text-faint">

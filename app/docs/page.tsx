@@ -98,7 +98,7 @@ export default function DocsPage() {
               <strong>Liquidity against market cap.</strong> Watch below 5%, Risk below 2%.
             </span>,
             <span key="f">
-              <strong>Pool age and profile.</strong> Watch for pools under an hour old, and for tokens with no
+              <strong>Token age and profile.</strong> Watch for tokens under an hour old, and for tokens with no
               website or socials listed on DexScreener.
             </span>,
           ]}

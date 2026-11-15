@@ -6,7 +6,7 @@ import { UpstreamError } from "./cache";
 import { tokenPairs } from "./dexscreener";
 import { poolTrades, tokenInfo } from "./gecko";
 import { computePnl, rankTokenWallets } from "./pnl";
-import { enrichWithTide, tideCoinTrades, tideEnabled } from "./tide";
+import { enrichWithTide, tideCoinTrades, tideEnabled, tidePackagePublishedAt } from "./tide";
 import { holderCheck } from "./tide-parse";
 
 export async function analyseToken(rawInput: string): Promise<{ body: XRayResponse; status: number }> {
@@ -62,7 +62,12 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
     };
   }
 
-  const best = pairs[0] ?? null;
+  // If the token has a newly-created pool, use that recent pair so X-Ray
+  // matches the Launches card instead of jumping to an older, deeper pool for
+  // the same coin type.
+  const recentCutoff = Date.now() - 24 * 60 * 60_000;
+  const recentPairs = pairs.filter((pair) => pair.createdAt !== null && pair.createdAt >= recentCutoff);
+  const best = (recentPairs.length > 0 ? recentPairs : pairs)[0] ?? null;
   const poolAddress = best?.pairAddress ?? info?.topPools[0] ?? null;
   if (!poolAddress) {
     return {
@@ -70,7 +75,8 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
       status: 404,
     };
   }
-  const ageMinutes = best?.createdAt ? Math.max(0, (Date.now() - best.createdAt) / 60_000) : null;
+  const packagePublishedAt = await tidePackagePublishedAt(coinType.split("::")[0]).catch(() => null);
+  const ageMinutes = packagePublishedAt === null ? null : Math.max(0, (Date.now() - packagePublishedAt) / 60_000);
   const priceUsd = info?.priceUsd ?? best?.priceUsd ?? null;
 
   let rawTrades: Record<string, unknown>[] | null = null;
@@ -145,7 +151,9 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
   } else if (tradesFailed) {
     coverage.note = "Trade history could not be loaded right now, so buyer details are missing. Try again in a minute.";
   }
-  const marketCap = info?.marketCap ?? best?.marketCap ?? null;
+  // Keep X-Ray aligned with list pages: use the selected pair's market cap
+  // first, then token metadata, then FDV as the same fallback as parsePool.
+  const marketCap = best?.marketCap ?? info?.marketCap ?? best?.fdv ?? info?.fdv ?? null;
   const liquidityUsd = best?.liquidityUsd ?? info?.liquidityUsd ?? null;
   const hasProfile = best ? best.hasProfile : null;
 

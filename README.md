@@ -13,13 +13,6 @@ npm install
 npm run dev          # http://localhost:3000
 ```
 
-Production:
-
-```bash
-npm run build
-npm start
-```
-
 Checks:
 
 ```bash
@@ -80,9 +73,7 @@ These come from using only free sources.
 - **Leaderboard scope.** It is a snapshot of up to 12 of the most active pools over the last 24 hours, rebuilt
   about every 10 minutes. It is not a lifetime or 30-day record.
 - **Rate limits.** GeckoTerminal allows about 30 calls a minute. Radar budgets 24, caches, de-duplicates and
-  serves stale data when a limit is hit. The cache lives in memory per server instance, so on serverless
-  hosting each instance keeps its own and the effective budget is higher than intended. Put a shared cache
-  (for example Redis) in front before launch.
+  serves stale data when a limit is hit.
 - **Not built yet.** Bundled-buy, sniper and insider share, and a dev's past launches. These need on-chain
   indexing (Sui GraphQL or gRPC), which the free market APIs do not provide.
 
@@ -109,8 +100,7 @@ All optional. Copy `.env.example` to `.env.local` to set them.
   visible in the recent trade feed. It does not consume Tide credits.
 
 A scan costs about 55-60 credits before SQL data-read charges. Tide never blocks the market-only leaderboard: if it is off, slow, out of credits or
-returns something unexpected, the page is the same as without it. Tide does not offer a time window for profit,
-so these figures are all-time. There is no 7 or 30 day view from Tide; that still needs saved snapshots or an indexer.
+returns something unexpected, the page is the same as without it. X-Ray's Tide trade scan covers the last 30 days.
 
 Tide's docs do not publish a JSON schema, so the parsers in `lib/server/tide-parse.ts` were written from the
 documented field names and are strict: unrecognised data is dropped, never guessed. Check them against the real
@@ -130,14 +120,3 @@ GECKO_BASE=http://localhost:4010/api/v2 DEXSCREENER_BASE=http://localhost:4010 n
 
 Try `0xabc123::meme::MEME` in X-Ray. The mock returns the same trade set for every pool, so leaderboard
 rows look repetitive. That is the mock, not the app.
-
-## Before launch
-
-- Verify every endpoint against the live GeckoTerminal and DexScreener APIs. This build was developed in a
-  sandbox that could not reach them, so parsing is tested against the documented response shapes and a mock,
-  not against live responses.
-- Add a shared cache and, if you outgrow the free limits, a paid data key or your own Sui indexer.
-- Have the privacy, terms and disclaimer pages reviewed and add a contact route.
-- The logo lives in `public/logo.png` (header, brand page) and `app/icon.png` / `app/apple-icon.png` (favicon). Colours are tokens in `app/globals.css`, so adding an
-  accent later is a small change.
-- Next.js in this project differs from older versions. See `AGENTS.md` and `node_modules/next/dist/docs/`.

@@ -37,8 +37,21 @@ const DEADLINE_MS = 8_000;
 const HOLDERS_TTL = 10 * 60_000;
 const PNL_TTL = 5 * 60_000;
 const TRADE_TTL = 5 * 60_000;
+const PACKAGE_TTL = 24 * 60 * 60_000;
 
 export const tideEnabled = () => KEY !== "";
+
+type PackageMetadata = { publishedAt?: string | number | null };
+
+/** Returns the original publication time for a Move package. */
+export async function tidePackagePublishedAt(packageId: string): Promise<number | null> {
+  if (!tideEnabled()) return null;
+  const doc = await get(`/v1/packages/${encodeURIComponent(packageId)}`, PACKAGE_TTL) as PackageMetadata | null;
+  const raw = doc?.publishedAt;
+  const value = typeof raw === "string" && !/^\d+(\.\d+)?$/.test(raw) ? Date.parse(raw) : Number(raw);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value < 10_000_000_000 ? value * 1_000 : value;
+}
 
 type Meter = { day: string; used: number };
 const g = globalThis as unknown as { __radarTide?: Meter };

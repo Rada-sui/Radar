@@ -153,7 +153,7 @@ function Report({ r }: { r: XRayResult }) {
           <Stat label="Liquidity" value={fmtUsd(t.liquidityUsd)} />
           <Stat label="Volume 24h" value={fmtUsd(t.volumeH24)} />
           <Stat label="Change 24h" value={fmtPct(t.changeH24)} tone={toneClass(t.changeH24)} />
-          <Stat label="Pool age" value={fmtAge(t.ageMinutes)} />
+          <Stat label="Token age" value={fmtAge(t.ageMinutes)} />
         </dl>
         <p className="mt-6 flex flex-wrap gap-x-6 gap-y-2 text-sm">
           {t.links.gecko && (
@@ -171,6 +171,8 @@ function Report({ r }: { r: XRayResult }) {
           </a>
         </p>
       </div>
+
+      {r.summary && <TokenActivity summary={r.summary} coverage={r.coverage} />}
 
       <section>
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -205,10 +207,6 @@ function Report({ r }: { r: XRayResult }) {
         </section>
       )}
 
-      <p className="num text-xs text-faint">
-        Updated {new Date(r.updatedAt).toLocaleTimeString()}. Sources: GeckoTerminal, DexScreener
-        {r.tide && (r.tide.status === "ok" || r.tide.status === "partial") ? ", Tide" : ""}.
-      </p>
     </div>
   );
 }
@@ -244,6 +242,25 @@ function WalletRow({ wallet: w, open, onToggle }: { wallet: XRayWallet; open: bo
         </div>
       )}
     </div>
+  );
+}
+
+function TokenActivity({ summary, coverage }: { summary: XRayResult["summary"]; coverage: XRayResult["coverage"] }) {
+  if (!summary) return null;
+  return (
+    <section className="border-y border-line py-6">
+      <div className="flex flex-wrap items-baseline justify-between gap-3">
+        <h3 className="font-display text-xl font-medium tracking-tight">Token activity</h3>
+        <span className="text-xs text-faint">{coverage.kind === "complete" ? "30-day coverage" : "Limited coverage"}</span>
+      </div>
+      <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <Stat label="Trades" value={String(summary.trades)} />
+        <Stat label="Buyers / sellers" value={`${summary.uniqueBuyers} / ${summary.uniqueSellers}`} />
+        <Stat label="Buy volume" value={fmtUsd(summary.buyUsd)} tone="text-gain" />
+        <Stat label="Sell volume" value={fmtUsd(summary.sellUsd)} tone="text-loss" />
+      </dl>
+      {coverage.note && <p className="mt-4 text-xs text-dim">{coverage.note}</p>}
+    </section>
   );
 }
 

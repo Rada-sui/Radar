@@ -1,6 +1,6 @@
 import "server-only";
 import type { RadarToken, ReportResponse } from "@/lib/types";
-import { newTokens, topTokens, trendingTokens } from "./gecko";
+import { newTokens, topTokens, trendingTokens, withTokenAges } from "./gecko";
 
 /**
  * Daily report, built from the pools Radar already reads: top volume,
@@ -11,8 +11,8 @@ export function buildReport(lists: RadarToken[][], now = Date.now()) {
   for (const list of lists) {
     for (const t of list) {
       const existing = byToken.get(t.address);
-      // The same token can appear in several pools. Prefer a real pool age
-      // over GeckoTerminal's unknown-timestamp sentinel, while preserving the
+      // The same token can appear in several pools. Prefer a known token age,
+      // while preserving the
       // first list's values for every other field.
       if (!existing || (existing.ageMinutes === null && t.ageMinutes !== null)) byToken.set(t.address, t);
     }
@@ -57,7 +57,7 @@ export function buildReport(lists: RadarToken[][], now = Date.now()) {
 
 export async function getReport(): Promise<{ body: ReportResponse; status: number }> {
   const settled = await Promise.allSettled([topTokens(), trendingTokens("24h"), newTokens()]);
-  const lists = settled.flatMap((s) => (s.status === "fulfilled" ? [s.value] : []));
+  const lists = await Promise.all(settled.flatMap((s) => (s.status === "fulfilled" ? [withTokenAges(s.value)] : [])));
   if (lists.length === 0 || lists.every((l) => l.length === 0)) {
     return {
       body: { ok: false, error: "The market data source did not respond. Try again in a minute." },

@@ -44,7 +44,7 @@ export default function ReportView() {
                   <th scope="col" className="px-4 py-3 text-right font-normal">Change 24h</th>
                   <th scope="col" className="px-4 py-3 text-right font-normal">Market cap</th>
                   <th scope="col" className="px-4 py-3 text-right font-normal">Liquidity</th>
-                  <th scope="col" className="py-3 pl-4 text-right font-normal">Age</th>
+                  <th scope="col" className="py-3 pl-4 text-right font-normal">Token age</th>
                 </tr>
               </thead>
               <tbody>
@@ -84,7 +84,7 @@ export default function ReportView() {
       </section>
 
       <section>
-        <SectionTitle>Newest pools</SectionTitle>
+        <SectionTitle>Newest tokens</SectionTitle>
         <ul className="mt-5 border-b border-line">
           {r.newest.map((t) => (
             <li key={t.address} className="border-t border-line">
@@ -103,8 +103,8 @@ export default function ReportView() {
       </section>
 
       <p className="max-w-2xl text-sm leading-relaxed text-faint">
-        This report describes the pools Radar reads from GeckoTerminal (top volume, trending and new), not every
-        pool on Sui. Updated {new Date(r.updatedAt).toLocaleTimeString()}.
+        This report describes tokens Radar reads from GeckoTerminal (top volume, trending and new), not every
+        token on Sui.
       </p>
     </div>
   );
