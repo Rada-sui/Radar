@@ -59,13 +59,17 @@ export async function newTokens() {
 /** Replace the market pool age with the package publication age. */
 export async function withTokenAges(tokens: RadarToken[]) {
   if (!tideEnabled()) return tokens.map((token) => ({ ...token, ageMinutes: null }));
+  const packageAge = new Map<string, Promise<number | null>>();
   const withAge = await Promise.all(tokens.map(async (token) => {
-    try {
-      const published = await tidePackagePublishedAt(token.address.split("::")[0]);
-      return { token, ageMinutes: published === null ? null : Math.max(0, (Date.now() - published) / 60_000) };
-    } catch {
-      return { token, ageMinutes: null };
+    const packageId = token.address.split("::")[0].toLowerCase();
+    let agePromise = packageAge.get(packageId);
+    if (!agePromise) {
+      agePromise = tidePackagePublishedAt(packageId)
+        .then((published) => published === null ? null : Math.max(0, (Date.now() - published) / 60_000))
+        .catch(() => null);
+      packageAge.set(packageId, agePromise);
     }
+    return { token, ageMinutes: await agePromise };
   }));
   return withAge.map((row) => ({ ...row.token, ageMinutes: row.ageMinutes }));
 }

@@ -42,10 +42,15 @@ export const tideEnabled = () => KEY !== "";
 
 type PackageMetadata = { publishedAt?: string | number | null };
 
+function canonicalPackageId(packageId: string): string {
+  const hex = packageId.trim().replace(/^0x/i, "");
+  return `0x${hex.padStart(64, "0")}`;
+}
+
 /** Returns the original publication time for a Move package. */
 export async function tidePackagePublishedAt(packageId: string): Promise<number | null> {
   if (!tideEnabled()) return null;
-  const doc = await get(`/v1/packages/${encodeURIComponent(packageId)}`, PACKAGE_TTL) as PackageMetadata | null;
+  const doc = await get(`/v1/packages/${encodeURIComponent(canonicalPackageId(packageId))}`, PACKAGE_TTL) as PackageMetadata | null;
   const raw = doc?.publishedAt;
   const value = typeof raw === "string" && !/^\d+(\.\d+)?$/.test(raw) ? Date.parse(raw) : Number(raw);
   if (!Number.isFinite(value) || value <= 0) return null;
