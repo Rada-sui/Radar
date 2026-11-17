@@ -75,10 +75,6 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
       status: 404,
     };
   }
-  const packagePublishedAt = await tidePackagePublishedAt(coinType.split("::")[0]).catch(() => null);
-  const ageMinutes = packagePublishedAt === null ? null : Math.max(0, (Date.now() - packagePublishedAt) / 60_000);
-  const priceUsd = info?.priceUsd ?? best?.priceUsd ?? null;
-
   let rawTrades: Record<string, unknown>[] | null = null;
   let tradesFailed = false;
   try {
@@ -86,27 +82,28 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
   } catch {
     tradesFailed = true;
   }
+  const packagePublishedAt = await tidePackagePublishedAt(coinType.split("::")[0]).catch(() => null);
+  const ageMinutes = packagePublishedAt === null ? null : Math.max(0, (Date.now() - packagePublishedAt) / 60_000);
+  const priceUsd = info?.priceUsd ?? best?.priceUsd ?? null;
 
-  // Tide supplies the token-wide 30-day trade history. Do not silently fall
-  // back to Gecko here: its free feed is capped and would violate X-Ray's
-  // 30-day wallet contract.
+  // Tide supplies the token-wide all-time trade history. Gecko remains the
+  // explicit, limited fallback when Tide cannot answer.
   let tideTrades: Awaited<ReturnType<typeof tideCoinTrades>> = null;
   let usedGeckoFallback = false;
   try {
     tideTrades = await tideCoinTrades(coinType);
   } catch (error) {
     if (error instanceof UpstreamError && error.status === 402) {
-      return {
-        body: { ok: false, code: "upstream", error: "Tide has run out of API credits for this account. Add credits or try again after the daily limit resets." },
-        status: 503,
-      };
+      // Keep X-Ray usable on Tide credit exhaustion. The capped Gecko feed is
+      // a limited fallback, and the coverage note below makes that explicit.
+      tideTrades = null;
     }
   }
   const trades = tideTrades ?? (rawTrades ? parseTrades(rawTrades, coinType) : []);
   usedGeckoFallback = tideTrades === null;
   const wallets = aggregateWallets(trades, priceUsd);
   const summary = trades.length ? summarise(trades, wallets) : null;
-  const pnlRows = computePnl(trades.map((trade) => ({ ...trade, token: coinType })), Date.now() - 30 * 86_400_000);
+  const pnlRows = computePnl(trades.map((trade) => ({ ...trade, token: coinType })), 0);
   const profitableWallets: XRayWallet[] = rankTokenWallets(pnlRows).map((wallet) => ({
     address: wallet.address,
     tier: wallet.tier,
@@ -142,12 +139,31 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
   }
   for (const w of profitableWallets) {
     const lifetime = tide.lifetime.get(w.address);
-    if (lifetime) w.lifetime = lifetime;
+    if (lifetime) {
+      w.lifetime = lifetime;
+      if (w.roiMultiple === null) {
+        const tideCost = lifetime.soldUsd !== null && lifetime.realisedUsd !== null
+          ? lifetime.soldUsd - lifetime.realisedUsd
+          : null;
+        if (tideCost !== null && tideCost > 0 && lifetime.soldUsd !== null) {
+          w.roiMultiple = lifetime.soldUsd / tideCost;
+        } else if (lifetime.roiPct !== null && Number.isFinite(lifetime.roiPct)) {
+          w.roiMultiple = 1 + lifetime.roiPct / 100;
+        }
+      }
+    }
+    // Last-resort display fallback when matching and Tide both lack a cost
+    // basis. This is deliberately after the realised-cost calculation so open
+    // positions cannot turn a profitable realised trade into a 0.x multiple.
+    if (w.roiMultiple === null && w.boughtUsd > 0 && w.soldUsd > 0) {
+      const fallback = w.soldUsd / w.boughtUsd;
+      if (fallback > 1) w.roiMultiple = fallback;
+    }
   }
   const holderRow = holderCheck(tide.holders);
   const coverage = coverageOf(trades, ageMinutes);
   if (usedGeckoFallback) {
-    coverage.note = "Tide 30-day history was unavailable, so this scan uses GeckoTerminal's limited recent trade feed.";
+    coverage.note = "Tide all-time history was unavailable, so this scan uses GeckoTerminal's limited recent trade feed.";
   } else if (tradesFailed) {
     coverage.note = "Trade history could not be loaded right now, so buyer details are missing. Try again in a minute.";
   }

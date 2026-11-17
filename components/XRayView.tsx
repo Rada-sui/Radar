@@ -5,7 +5,6 @@ import { useEffect, useState, type FormEvent } from "react";
 import { fmtAge, fmtAgo, fmtPct, fmtRoi, fmtUsd, shortAddr, toneClass } from "@/lib/format";
 import { explorerAccount, explorerCoin } from "@/lib/sui";
 import type { CheckLevel, TideLifetime, XRayCheck, XRayResponse, XRayResult, XRayWallet } from "@/lib/types";
-import { ShowCount } from "./ui";
 
 type Loaded = { key: string; res: XRayResponse };
 
@@ -129,7 +128,6 @@ const LEVEL: Record<CheckLevel, { label: string; cls: string }> = {
 };
 
 function Report({ r }: { r: XRayResult }) {
-  const [show, setShow] = useState(10);
   const [expanded, setExpanded] = useState<string | null>(null);
   const t = r.token;
   return (
@@ -180,13 +178,12 @@ function Report({ r }: { r: XRayResult }) {
             <h3 className="font-display text-xl font-medium tracking-tight">Profitable wallets</h3>
             <p className="mt-2 text-sm text-dim">{r.scan.trades} trades read across {r.scan.walletsRead} wallets.</p>
           </div>
-          <ShowCount count={r.wallets.length} value={show} onChange={setShow} />
         </div>
         {r.wallets.length === 0 ? (
           <p className="mt-6 border-t border-line pt-5 text-dim">No profitable wallets in the trades we can see.</p>
         ) : (
           <div className="mt-5 space-y-2">
-            {r.wallets.slice(0, show).map((wallet) => (
+            {r.wallets.slice(0, 10).map((wallet) => (
               <WalletRow key={wallet.address} wallet={wallet} open={expanded === wallet.address} onToggle={() => setExpanded(expanded === wallet.address ? null : wallet.address)} />
             ))}
           </div>
@@ -251,7 +248,7 @@ function TokenActivity({ summary, coverage }: { summary: XRayResult["summary"]; 
     <section className="border-y border-line py-6">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h3 className="font-display text-xl font-medium tracking-tight">Token activity</h3>
-        <span className="text-xs text-faint">{coverage.kind === "complete" ? "30-day coverage" : "Limited coverage"}</span>
+        <span className="text-xs text-faint">{coverage.kind === "complete" ? "All-time Tide coverage" : "Limited coverage"}</span>
       </div>
       <dl className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Trades" value={String(summary.trades)} />

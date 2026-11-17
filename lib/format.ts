@@ -44,5 +44,8 @@ export function toneClass(n: number | null | undefined): string {
 /** Display ROI to two decimal places without exposing noisy calculation precision. */
 export function fmtRoi(n: number | null | undefined): string {
   if (n == null || !Number.isFinite(n)) return "n/a";
-  return `${n.toFixed(2)}x`;
+  const rounded = Math.abs(n) >= 10
+    ? (Math.trunc(n * 10) / 10).toFixed(1)
+    : n.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
+  return `${rounded}x`;
 }

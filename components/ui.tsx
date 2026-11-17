@@ -71,12 +71,12 @@ export function showCountOptions(count: number) {
   return [5, 10, 20, 30].filter((option) => count >= option);
 }
 
-export function ShowCount({ count, value, onChange }: { count: number; value: number; onChange: (value: number) => void }) {
+export function ShowCount({ count, value, onChange, label = "Show" }: { count: number; value: number; onChange: (value: number) => void; label?: string }) {
   const options = showCountOptions(count);
   if (options.length === 0) return null;
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm" aria-label="Rows to show">
-      <span className="text-dim">Show</span>
+      <span className="text-dim">{label}</span>
       <div className="flex flex-wrap gap-1" role="group" aria-label="Number of rows">
         {options.map((option) => (
           <button

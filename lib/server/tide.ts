@@ -106,9 +106,7 @@ export async function tideCoinTrades(coinType: string): Promise<Trade[] | null> 
     token_sold_address, token_bought_address, token_sold_amount, token_bought_amount,
     token_sold_usd, token_bought_usd
     FROM dex.trades
-    WHERE (token_sold_address = {{coin}} OR token_bought_address = {{coin}})
-      AND block_time >= now() - INTERVAL '30' DAY
-    LIMIT 10000`;
+    WHERE (token_sold_address = {{coin}} OR token_bought_address = {{coin}})`;
   let doc: SqlResponse | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
     doc = await fetchJson<SqlResponse>(`${BASE}/v1/sql/execute`, {
@@ -144,6 +142,8 @@ export async function tideCoinTrades(coinType: string): Promise<Trade[] | null> 
   // In that case the documented results endpoint must be read using the id.
   if (!rows && executionId && finished) {
     const resultDoc = await fetchJson<{ result?: { rows?: Record<string, unknown>[] } }>(
+      // Tide's execution results endpoint supports 10,000-row pages. The SQL
+      // itself remains all-time; this is the first result page size.
       `${BASE}/v1/execution/${encodeURIComponent(executionId)}/results?limit=10000&offset=0`,
       { bucket: "tide", perMinute: PER_MINUTE, ttlMs: TRADE_TTL, headers: { "x-api-key": KEY } },
     );
@@ -153,7 +153,9 @@ export async function tideCoinTrades(coinType: string): Promise<Trade[] | null> 
   const out: Trade[] = [];
   for (const row of rows) {
     const wallet = typeof row.sender === "string" ? row.sender : "";
-    const ts = typeof row.block_time === "string" ? Date.parse(`${row.block_time}Z`) : NaN;
+    const ts = typeof row.block_time === "string"
+      ? Date.parse(/[zZ]|[+-]\d{2}:?\d{2}$/.test(row.block_time) ? row.block_time : `${row.block_time}Z`)
+      : NaN;
     const soldAddress = typeof row.token_sold_address === "string" ? row.token_sold_address : "";
     const boughtAddress = typeof row.token_bought_address === "string" ? row.token_bought_address : "";
     const side = sameCoin(boughtAddress, coinType) ? "buy" : sameCoin(soldAddress, coinType) ? "sell" : null;
