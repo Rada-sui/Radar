@@ -19,12 +19,14 @@
     "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@supabase/cli-windows-x64": "^3.2.0",
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.4.5",
+    "supabase": "^3.2.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.15",
     "typescript": "^5"

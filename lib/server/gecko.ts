@@ -3,6 +3,7 @@ import { fetchJson } from "./cache";
 import { parsePool, parseTokenInfo, type GeckoDoc, type GeckoResource, type GeckoTokenInfo } from "./parse";
 import type { RadarToken } from "@/lib/types";
 import { tidePackagePublishedAt, tideEnabled } from "./tide";
+import { persistRadarTokens } from "./persistence";
 
 // GeckoTerminal's free, keyless API. Network id for Sui is "sui-network".
 // GECKO_BASE can point at a mock or proxy, e.g. for tests.
@@ -46,14 +47,18 @@ export async function trendingTokens(duration: "5m" | "1h" | "6h" | "24h" = "1h"
     `/networks/${NETWORK}/trending_pools?${POOL_INCLUDE}&duration=${duration}`,
     60_000,
   );
-  return toTokens(doc);
+  const tokens = toTokens(doc);
+  void persistRadarTokens(tokens, "geckoterminal");
+  return tokens;
 }
 
 export async function newTokens() {
   const doc = await get<GeckoDoc>(`/networks/${NETWORK}/new_pools?${POOL_INCLUDE}`, 45_000);
   const maxAgeMinutes = 24 * 60;
   const withAge = await withTokenAges(toTokens(doc));
-  return withAge.filter((row) => row.ageMinutes !== null && row.ageMinutes <= maxAgeMinutes);
+  const fresh = withAge.filter((row) => row.ageMinutes !== null && row.ageMinutes <= maxAgeMinutes);
+  void persistRadarTokens(fresh, "geckoterminal");
+  return fresh;
 }
 
 /** Replace the market pool age with the package publication age. */
@@ -79,7 +84,9 @@ export async function topTokens() {
     `/networks/${NETWORK}/pools?${POOL_INCLUDE}&sort=h24_volume_usd_desc`,
     90_000,
   );
-  return toTokens(doc);
+  const tokens = toTokens(doc);
+  void persistRadarTokens(tokens, "geckoterminal");
+  return tokens;
 }
 
 export async function tokenInfo(coinType: string): Promise<GeckoTokenInfo | null> {

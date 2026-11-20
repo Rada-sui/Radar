@@ -1,6 +1,7 @@
 import "server-only";
 import { fetchJson } from "./cache";
 import { num } from "./parse";
+import { persistDexPairs } from "./persistence";
 
 // DexScreener's free API. Documented limits are 60/min on profile endpoints
 // and 300/min on pair endpoints; stay well under both.
@@ -75,8 +76,10 @@ export async function tokenPairs(coinType: string): Promise<DexPair[]> {
     { bucket: "dexscreener", perMinute: 100, ttlMs: 45_000, emptyOn: [404] },
   );
   if (!Array.isArray(raw)) return [];
-  return raw
+  const pairs = raw
     .map(parsePair)
     .filter((p): p is DexPair => p !== null)
     .sort((a, b) => (b.liquidityUsd ?? 0) - (a.liquidityUsd ?? 0));
+  void persistDexPairs(coinType, pairs.map((pair) => ({ ...pair, source: "dexscreener" })));
+  return pairs;
 }

@@ -8,6 +8,11 @@ import { poolTrades, tokenInfo } from "./gecko";
 import { computePnl, rankTokenWallets } from "./pnl";
 import { enrichWithTide, tideCoinTrades, tideEnabled, tidePackagePublishedAt } from "./tide";
 import { holderCheck } from "./tide-parse";
+import { blockVisionCoinTrades } from "./blockvision";
+import { blockberryCoinInfo } from "./blockberry";
+import { persistTrades } from "./persistence";
+
+const MAX_WALLETS_RETURNED = 30;
 
 export async function analyseToken(rawInput: string): Promise<{ body: XRayResponse; status: number }> {
   const coinType = rawInput.trim();
@@ -26,9 +31,14 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
     };
   }
 
-  const [infoR, pairsR] = await Promise.allSettled([tokenInfo(coinType), tokenPairs(coinType)]);
+  const [infoR, pairsR, blockberryR] = await Promise.allSettled([
+    tokenInfo(coinType),
+    tokenPairs(coinType),
+    blockberryCoinInfo(coinType),
+  ]);
   const info = infoR.status === "fulfilled" ? infoR.value : null;
   const pairs = pairsR.status === "fulfilled" ? pairsR.value : [];
+  const blockberry = blockberryR.status === "fulfilled" ? blockberryR.value : null;
 
   if (!info && pairs.length === 0) {
     const limited = [infoR, pairsR].some(
@@ -99,12 +109,43 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
       tideTrades = null;
     }
   }
-  const trades = tideTrades ?? (rawTrades ? parseTrades(rawTrades, coinType) : []);
+  const geckoTrades = rawTrades ? parseTrades(rawTrades, coinType) : [];
+  let blockVisionTrades: Awaited<ReturnType<typeof blockVisionCoinTrades>> = null;
+  if (tideTrades === null) {
+    blockVisionTrades = await blockVisionCoinTrades(coinType).catch(() => null);
+  }
+  let trades = tideTrades ?? (geckoTrades.length ? geckoTrades : (blockVisionTrades ?? []));
+  if (tideTrades === null && blockVisionTrades && geckoTrades.length > 0) {
+    const geckoRanked = rankTokenWallets(computePnl(geckoTrades.map((trade) => ({ ...trade, token: coinType })), 0));
+    const blockVisionRanked = rankTokenWallets(computePnl(blockVisionTrades.map((trade) => ({ ...trade, token: coinType })), 0));
+    if (blockVisionRanked.length > geckoRanked.length) trades = blockVisionTrades;
+  }
   usedGeckoFallback = tideTrades === null;
-  const wallets = aggregateWallets(trades, priceUsd);
-  const summary = trades.length ? summarise(trades, wallets) : null;
-  const pnlRows = computePnl(trades.map((trade) => ({ ...trade, token: coinType })), 0);
-  const profitableWallets: XRayWallet[] = rankTokenWallets(pnlRows).map((wallet) => ({
+  let wallets = aggregateWallets(trades, priceUsd);
+  let summary = trades.length ? summarise(trades, wallets) : null;
+  let pnlRows = computePnl(trades.map((trade) => ({ ...trade, token: coinType })), 0);
+  let rankedWallets = rankTokenWallets(pnlRows);
+
+  // Tide may answer with a thin or partially indexed history. In that case,
+  // ask BlockVision for an independent trade set and use it only when it
+  // produces more valid profitable wallets.
+  if (tideTrades !== null && rankedWallets.length < 10) {
+    blockVisionTrades = await blockVisionCoinTrades(coinType).catch(() => null);
+    if (blockVisionTrades) {
+      const blockVisionRanked = rankTokenWallets(computePnl(blockVisionTrades.map((trade) => ({ ...trade, token: coinType })), 0));
+      if (blockVisionRanked.length > rankedWallets.length) {
+        trades = blockVisionTrades;
+        wallets = aggregateWallets(trades, priceUsd);
+        summary = trades.length ? summarise(trades, wallets) : null;
+        pnlRows = computePnl(trades.map((trade) => ({ ...trade, token: coinType })), 0);
+        rankedWallets = blockVisionRanked;
+      }
+    }
+  }
+
+  const tradeSource = trades === blockVisionTrades ? "blockvision" : tideTrades ? "tide" : "geckoterminal";
+  void persistTrades(coinType, trades, tradeSource);
+  const profitableWallets: XRayWallet[] = rankedWallets.slice(0, MAX_WALLETS_RETURNED).map((wallet) => ({
     address: wallet.address,
     tier: wallet.tier,
     roiMultiple: wallet.roiMultiple,
@@ -163,7 +204,9 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
   const holderRow = holderCheck(tide.holders);
   const coverage = coverageOf(trades, ageMinutes);
   if (usedGeckoFallback) {
-    coverage.note = "Tide all-time history was unavailable, so this scan uses GeckoTerminal's limited recent trade feed.";
+    coverage.note = tradeSource === "blockvision"
+      ? "Tide all-time history was unavailable. BlockVision supplied supplementary swap activity; coverage may be partial."
+      : "Tide all-time history was unavailable, so this scan uses GeckoTerminal's limited recent trade feed.";
   } else if (tradesFailed) {
     coverage.note = "Trade history could not be loaded right now, so buyer details are missing. Try again in a minute.";
   }
@@ -176,9 +219,9 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
   const result: XRayResult = {
     token: {
       address: coinType,
-      symbol: info?.symbol ?? best?.baseSymbol ?? "?",
-      name: info?.name ?? best?.baseName ?? "Unknown token",
-      imageUrl: info?.imageUrl ?? best?.imageUrl ?? null,
+      symbol: info?.symbol ?? blockberry?.symbol ?? best?.baseSymbol ?? "?",
+      name: info?.name ?? blockberry?.name ?? best?.baseName ?? "Unknown token",
+      imageUrl: info?.imageUrl ?? blockberry?.imageUrl ?? best?.imageUrl ?? null,
       priceUsd,
       marketCap,
       fdv: info?.fdv ?? best?.fdv ?? null,

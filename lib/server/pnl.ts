@@ -197,7 +197,9 @@ export function gradeWallets(pnls: WalletPnl[]): Graded {
       droppedBots += 1;
       continue;
     }
-    if (p.tokensClosed < 1 || p.realised <= 0) {
+    // A microscopic gain can round to "1x" in the UI and is not useful as a
+    // profitable-wallet result. Require enough margin to display above 1x.
+    if (p.tokensClosed < 1 || p.realised <= 0 || p.roiMultiple === null || p.roiMultiple < 1.005) {
       droppedUnprofitable += 1;
       continue;
     }

@@ -140,14 +140,22 @@ export async function tideCoinTrades(coinType: string): Promise<Trade[] | null> 
   }
   // Tide may complete a query without embedding rows in the execute response.
   // In that case the documented results endpoint must be read using the id.
-  if (!rows && executionId && finished) {
-    const resultDoc = await fetchJson<{ result?: { rows?: Record<string, unknown>[] } }>(
-      // Tide's execution results endpoint supports 10,000-row pages. The SQL
-      // itself remains all-time; this is the first result page size.
-      `${BASE}/v1/execution/${encodeURIComponent(executionId)}/results?limit=10000&offset=0`,
-      { bucket: "tide", perMinute: PER_MINUTE, ttlMs: TRADE_TTL, headers: { "x-api-key": KEY } },
-    );
-    rows = resultDoc?.result?.rows;
+  if (executionId && finished) {
+    // Tide returns execution results in pages even when the SQL execution is
+    // complete. Read every page so a token with more than the first page of
+    // history does not look as if it had only one profitable wallet.
+    const allRows: Record<string, unknown>[] = [];
+    const pageSize = 10_000;
+    for (let offset = 0; offset < 100_000; offset += pageSize) {
+      const resultDoc = await fetchJson<{ result?: { rows?: Record<string, unknown>[] } }>(
+        `${BASE}/v1/execution/${encodeURIComponent(executionId)}/results?limit=${pageSize}&offset=${offset}`,
+        { bucket: "tide", perMinute: PER_MINUTE, ttlMs: TRADE_TTL, headers: { "x-api-key": KEY } },
+      );
+      const page = resultDoc?.result?.rows ?? [];
+      allRows.push(...page);
+      if (page.length < pageSize) break;
+    }
+    rows = allRows.length ? allRows : rows;
   }
   if (!rows) return null;
   const out: Trade[] = [];
@@ -164,7 +172,11 @@ export async function tideCoinTrades(coinType: string): Promise<Trade[] | null> 
     if (!wallet || !side || !Number.isFinite(ts) || tokens <= 0 || !Number.isFinite(usd) || usd < 0) continue;
     out.push({ ts, block: null, tx: String(row.transaction_digest ?? ""), wallet, side, tokens, usd });
   }
-  return out.sort((a, b) => a.ts - b.ts || a.tx.localeCompare(b.tx));
+  const sorted = out.sort((a, b) => a.ts - b.ts || a.tx.localeCompare(b.tx));
+  // An executed query with no usable rows is not authoritative coverage. Let
+  // X-Ray use its explicit market-data fallback instead of treating [] as a
+  // successful all-time history.
+  return sorted.length ? sorted : null;
 }
 
 export async function tideHolders(coinType: string): Promise<TideHolders | null> {

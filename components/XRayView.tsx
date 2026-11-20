@@ -183,7 +183,7 @@ function Report({ r }: { r: XRayResult }) {
           <p className="mt-6 border-t border-line pt-5 text-dim">No profitable wallets in the trades we can see.</p>
         ) : (
           <div className="mt-5 space-y-2">
-            {r.wallets.slice(0, 10).map((wallet) => (
+            {r.wallets.slice(0, 30).map((wallet) => (
               <WalletRow key={wallet.address} wallet={wallet} open={expanded === wallet.address} onToggle={() => setExpanded(expanded === wallet.address ? null : wallet.address)} />
             ))}
           </div>
