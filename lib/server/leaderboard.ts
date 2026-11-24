@@ -3,6 +3,7 @@ import type { LeaderBoard, LeaderResponse, RadarToken } from "@/lib/types";
 import { parseTrades } from "./analysis";
 import { newTokens, poolTrades, topTokens, trendingTokens } from "./gecko";
 import { computePnl, gradeWallets, type PnlTrade } from "./pnl";
+import { persistLeaderboard } from "./persistence";
 
 /**
  * Builds the wallet board from the free GeckoTerminal trade feed.
@@ -87,7 +88,7 @@ async function build(): Promise<LeaderBoard> {
   const rows = graded.ranked.slice(0, BOARD_SIZE);
   const basis = "24h" as const;
 
-  return {
+  const board: LeaderBoard = {
     rows,
     scan: {
       basis,
@@ -101,6 +102,8 @@ async function build(): Promise<LeaderBoard> {
     },
     updatedAt: now,
   };
+  void persistLeaderboard(board);
+  return board;
 }
 
 /** Serves the cached board, rebuilding in the background once it is stale. */

@@ -4,6 +4,7 @@ import { parsePool, parseTokenInfo, type GeckoDoc, type GeckoResource, type Geck
 import type { RadarToken } from "@/lib/types";
 import { tidePackagePublishedAt, tideEnabled } from "./tide";
 import { persistRadarTokens } from "./persistence";
+import { newSuiPumpTokens } from "./suipump";
 
 // GeckoTerminal's free, keyless API. Network id for Sui is "sui-network".
 // GECKO_BASE can point at a mock or proxy, e.g. for tests.
@@ -52,13 +53,26 @@ export async function trendingTokens(duration: "5m" | "1h" | "6h" | "24h" = "1h"
   return tokens;
 }
 
-export async function newTokens() {
+async function geckoNewTokens() {
   const doc = await get<GeckoDoc>(`/networks/${NETWORK}/new_pools?${POOL_INCLUDE}`, 45_000);
   const maxAgeMinutes = 24 * 60;
   const withAge = await withTokenAges(toTokens(doc));
   const fresh = withAge.filter((row) => row.ageMinutes !== null && row.ageMinutes <= maxAgeMinutes);
   void persistRadarTokens(fresh, "geckoterminal");
   return fresh;
+}
+
+/** New token discovery is merged from GeckoTerminal and SuiPump. */
+export async function newTokens() {
+  const [geckoR, pumpR] = await Promise.allSettled([geckoNewTokens(), newSuiPumpTokens()]);
+  const merged = new Map<string, RadarToken>();
+  for (const result of [geckoR, pumpR]) {
+    if (result.status !== "fulfilled") continue;
+    for (const token of result.value) if (!merged.has(token.address)) merged.set(token.address, token);
+  }
+  const tokens = [...merged.values()].sort((a, b) => (a.ageMinutes ?? Infinity) - (b.ageMinutes ?? Infinity));
+  void persistRadarTokens(tokens, "launches");
+  return tokens;
 }
 
 /** Replace the market pool age with the package publication age. */

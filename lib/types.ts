@@ -20,6 +20,13 @@ export type RadarToken = {
   /** Buy and sell counts over the last hour, when the source reports them. */
   buysH1?: number | null;
   sellsH1?: number | null;
+  /** Launchpad-native context; SUI amounts are intentionally not treated as USD. */
+  suipump?: {
+    graduated: boolean;
+    poolId: string | null;
+    volumeSui: number | null;
+    lastTradeAt: number | null;
+  };
 };
 
 export type RadarView = "trending" | "new" | "top";

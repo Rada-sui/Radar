@@ -10,7 +10,7 @@ import { enrichWithTide, tideCoinTrades, tideEnabled, tidePackagePublishedAt } f
 import { holderCheck } from "./tide-parse";
 import { blockVisionCoinTrades } from "./blockvision";
 import { blockberryCoinInfo } from "./blockberry";
-import { persistTrades } from "./persistence";
+import { persistTrades, persistXrayResult } from "./persistence";
 
 const MAX_WALLETS_RETURNED = 30;
 
@@ -248,6 +248,8 @@ export async function analyseToken(rawInput: string): Promise<{ body: XRayRespon
     tide: { status: tide.status, holders: tide.holders, walletsChecked: tide.walletsChecked },
     updatedAt: Date.now(),
   };
+
+  void persistXrayResult(result, tradeSource);
 
   return { body: { ok: true, result }, status: 200 };
 }

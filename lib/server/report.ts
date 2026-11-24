@@ -1,6 +1,7 @@
 import "server-only";
 import type { RadarToken, ReportResponse } from "@/lib/types";
 import { newTokens, topTokens, trendingTokens, withTokenAges } from "./gecko";
+import { persistReport } from "./persistence";
 
 /**
  * Daily report, built from the pools Radar already reads: top volume,
@@ -64,5 +65,7 @@ export async function getReport(): Promise<{ body: ReportResponse; status: numbe
       status: 502,
     };
   }
-  return { body: { ok: true, report: buildReport(lists) }, status: 200 };
+  const report = buildReport(lists);
+  void persistReport(report);
+  return { body: { ok: true, report }, status: 200 };
 }
