@@ -81,7 +81,7 @@ export default function LaunchesView() {
         sells, and what the first buyers did next.
       </p>
       <p className="num mt-2 text-xs text-faint">
-        Updated {new Date(data.updatedAt).toLocaleTimeString()}. Source: GeckoTerminal.
+        Updated {new Date(data.updatedAt).toLocaleTimeString()}. Sources: GeckoTerminal and SuiPump.
       </p>
     </div>
   );

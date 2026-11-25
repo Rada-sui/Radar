@@ -3,7 +3,7 @@ import { sameCoin } from "@/lib/sui";
 import type { Trade } from "./analysis";
 import type { TideHolders, TideLifetime, TideStatus } from "@/lib/types";
 import { fetchJson, UpstreamError } from "./cache";
-import { parseCoinPnl, parseHolders, parseWalletPnl, summariseWalletPnl, type WalletLifetime, type WalletPnlRow } from "./tide-parse";
+import { parseCoinPnl, parseHolders, parseWalletPnl, summariseWalletPnl, timeMs, type WalletLifetime, type WalletPnlRow } from "./tide-parse";
 
 /*
  * Tide (tide.ad): the authoritative wallet-performance source for Sui.
@@ -40,7 +40,7 @@ const PACKAGE_TTL = 24 * 60 * 60_000;
 
 export const tideEnabled = () => KEY !== "";
 
-type PackageMetadata = { publishedAt?: string | number | null };
+type PackageMetadata = Record<string, unknown>;
 
 function canonicalPackageId(packageId: string): string {
   const hex = packageId.trim().replace(/^0x/i, "");
@@ -51,10 +51,10 @@ function canonicalPackageId(packageId: string): string {
 export async function tidePackagePublishedAt(packageId: string): Promise<number | null> {
   if (!tideEnabled()) return null;
   const doc = await get(`/v1/packages/${encodeURIComponent(canonicalPackageId(packageId))}`, PACKAGE_TTL) as PackageMetadata | null;
-  const raw = doc?.publishedAt;
-  const value = typeof raw === "string" && !/^\d+(\.\d+)?$/.test(raw) ? Date.parse(raw) : Number(raw);
-  if (!Number.isFinite(value) || value <= 0) return null;
-  return value < 10_000_000_000 ? value * 1_000 : value;
+  if (!doc) return null;
+  const nested = [doc.data, doc.result, doc.package].find((value): value is PackageMetadata => Boolean(value && typeof value === "object" && !Array.isArray(value)));
+  const source = nested ?? doc;
+  return timeMs(source.publishedAt ?? source.published_at ?? source.createdAt ?? source.created_at);
 }
 
 type Meter = { day: string; used: number };

@@ -1,6 +1,6 @@
 import "server-only";
 import { momentumOf } from "./analysis";
-import { newTokens, topTokens, trendingTokens } from "./gecko";
+import { newTokens, topTokens, trendingTokens, withTokenAges } from "./gecko";
 import { UpstreamError } from "./cache";
 import type { RadarFeed, RadarView } from "@/lib/types";
 
@@ -10,8 +10,9 @@ export function parseView(v: string | null): RadarView {
 
 export async function buildRadarFeed(view: RadarView): Promise<{ feed: RadarFeed; status: number }> {
   try {
-    const tokens =
+    const rawTokens =
       view === "new" ? await newTokens() : view === "top" ? await topTokens() : await trendingTokens("1h");
+    const tokens = await withTokenAges(rawTokens);
     return {
       feed: { ok: true, view, tokens, momentum: momentumOf(tokens), updatedAt: Date.now() },
       status: 200,

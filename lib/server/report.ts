@@ -22,12 +22,18 @@ export function buildReport(lists: RadarToken[][], now = Date.now()) {
 
   // Ignore pools too thin to act on when naming the day's best runners.
   const runners = all
-    .filter((t) => t.changeH24 !== null && (t.liquidityUsd ?? 0) >= 5_000)
+    // A runner without a verified token age must not appear in this section;
+    // otherwise the report presents an incomplete age as if it were current.
+    .filter((t) => t.ageMinutes !== null && t.changeH24 !== null && (t.liquidityUsd ?? 0) >= 5_000)
     .sort((a, b) => (b.changeH24 ?? 0) - (a.changeH24 ?? 0))
     .slice(0, 10);
 
   const dexMap = new Map<string, { volumeH24: number; pools: number }>();
   for (const t of all) {
+    // SuiPump reports native SUI volume, not USD volume. Do not expose it as
+    // a misleading "$0" exchange total until a verified SUI/USD conversion is
+    // available; the launchpad stats remain stored in the token record.
+    if (t.volumeH24 === null) continue;
     const key = t.dex ?? "unknown";
     const cur = dexMap.get(key) ?? { volumeH24: 0, pools: 0 };
     cur.volumeH24 += t.volumeH24 ?? 0;
@@ -39,7 +45,7 @@ export function buildReport(lists: RadarToken[][], now = Date.now()) {
     .sort((a, b) => b.volumeH24 - a.volumeH24);
 
   const newest = [...all]
-    .filter((t) => t.ageMinutes !== null)
+    .filter((t) => t.ageMinutes !== null && t.ageMinutes <= 24 * 60)
     .sort((a, b) => (a.ageMinutes ?? 0) - (b.ageMinutes ?? 0))
     .slice(0, 8);
 

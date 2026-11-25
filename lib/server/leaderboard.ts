@@ -4,6 +4,7 @@ import { parseTrades } from "./analysis";
 import { newTokens, poolTrades, topTokens, trendingTokens } from "./gecko";
 import { computePnl, gradeWallets, type PnlTrade } from "./pnl";
 import { persistLeaderboard } from "./persistence";
+import { goldskyHistoryDays, goldskyTrades } from "./goldsky";
 
 /**
  * Builds the wallet board from the free GeckoTerminal trade feed.
@@ -55,6 +56,9 @@ async function pickPools(): Promise<{ pools: RadarToken[]; total: number; skippe
 }
 
 async function build(): Promise<LeaderBoard> {
+  const goldsky = await goldskyTrades();
+  if (goldsky && goldsky.length > 0) return buildFromGoldsky(goldsky);
+
   const selection = await pickPools();
   const pools = selection.pools;
   if (pools.length === 0) throw new Error("no pools");
@@ -103,6 +107,31 @@ async function build(): Promise<LeaderBoard> {
     updatedAt: now,
   };
   void persistLeaderboard(board);
+  return board;
+}
+
+function buildFromGoldsky(all: PnlTrade[]): LeaderBoard {
+  const now = Date.now();
+  const pnls = computePnl(all, now - 24 * 60 * 60_000);
+  const graded = gradeWallets(pnls);
+  const board: LeaderBoard = {
+    rows: graded.ranked.slice(0, BOARD_SIZE).map((row) => ({ ...row, basis: "30d" as const })),
+    scan: {
+      basis: "30d",
+      pools: 0,
+      poolsTotal: 0,
+      poolsSkipped: 0,
+      poolsFailed: 0,
+      trades: all.length,
+      wallets: pnls.length,
+      windowHours: goldskyHistoryDays * 24,
+      recentHours: 24,
+      droppedBots: graded.droppedBots,
+      droppedInconsistent: graded.droppedInconsistent,
+    },
+    updatedAt: now,
+  };
+  void persistLeaderboard(board, "goldsky");
   return board;
 }
 

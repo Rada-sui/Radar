@@ -77,7 +77,14 @@ export async function newTokens() {
 
 /** Replace the market pool age with the package publication age. */
 export async function withTokenAges(tokens: RadarToken[]) {
-  if (!tideEnabled()) return tokens.map((token) => ({ ...token, ageMinutes: null }));
+  if (!tideEnabled()) {
+    return tokens.map((token) => ({
+      ...token,
+      // SuiPump's createdAt is a token launch timestamp. A Gecko pool age is
+      // not a token age, so it must not be shown as one.
+      ageMinutes: token.suipump ? token.ageMinutes : null,
+    }));
+  }
   const packageAge = new Map<string, Promise<number | null>>();
   const withAge = await Promise.all(tokens.map(async (token) => {
     const packageId = token.address.split("::")[0].toLowerCase();

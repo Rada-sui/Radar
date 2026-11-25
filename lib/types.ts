@@ -79,7 +79,7 @@ export type LeaderRow = {
   /** True when the wallet sold tokens it bought before the data window, or Tide could not read all of its history. */
   partial: boolean;
   /** What the figures cover. Absent means "24h" (older responses). */
-  basis?: "24h" | "lifetime";
+  basis?: "24h" | "30d" | "lifetime";
   /** Realised profit in the last 24h, kept alongside the whole-history figure on the Tide board. */
   realised24hUsd?: number;
 };
@@ -101,7 +101,7 @@ export type LeaderBoard = {
     droppedBots: number;
     droppedInconsistent: number;
     /** What the ranking figures cover. Absent means "24h". */
-    basis?: "24h" | "lifetime";
+    basis?: "24h" | "30d" | "lifetime";
     /** Present when Tide was used to rank on whole history. */
     tide?: { candidates: number; answered: number; incomplete: number; dropped: number };
   };
